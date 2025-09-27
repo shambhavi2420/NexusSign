@@ -1,0 +1,28 @@
+<% require_phone_2fa = @template.preferences['require_phone_2fa'] == true %>
+<% prefillable_fields = @template.fields.select { |f| f['prefillable'] } %>
+<% only_detailed = require_phone_2fa || prefillable_fields.present? %>
+<%= render 'shared/turbo_modal_large', title: params[:selfsign] ? t('add_recipients') : t('add_new_recipients') do %>
+  
+  <!-- Remove the toggle-visible section entirely -->
+  
+  <div class="px-5 mb-5 mt-4">
+    <% unless only_detailed %>
+      <!-- Show email form by default, remove hidden class -->
+      <div id="email">
+        <%= render 'email_form', template: @template %>
+      </div>
+      <!-- Hide other forms completely -->
+      <div id="phone" class="hidden">
+        <%= render 'phone_form', template: @template %>
+      </div>
+    <% end %>
+    <div id="detailed" class="<%= 'hidden' unless only_detailed %>">
+      <%= render 'detailed_form', template: @template, require_phone_2fa:, prefillable_fields: %>
+    </div>
+    <div id="list" class="hidden">
+      <%= render 'list_form', template: @template %>
+    </div>
+    <%= render 'submissions/error' %>
+  </div>
+  <%= content_for(:modal_extra) %>
+<% end %>
