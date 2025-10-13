@@ -206,15 +206,16 @@ module Submissions
 
       submission = submitter.submission
 
-      return pdfs_index if submission.template_fields.blank?
-
       with_headings = find_last_submitter(submission, submitter:).blank? if with_headings.nil?
 
       locale = submitter.metadata.fetch('lang', account.locale)
 
-      submission.template_fields.each do |field|
-        next if field['type'] == 'heading' && !with_headings
-        next if field['submitter_uuid'] != submitter.uuid && field['type'] != 'heading'
+      (submission.template_fields || submission.template.fields).each do |field|
+        next if !with_headings &&
+                (field['type'] == 'heading' || (field['type'] == 'strikethrough' && field['conditions'].blank?))
+
+        next if field['submitter_uuid'] != submitter.uuid && field['type'] != 'heading' &&
+                (field['type'] != 'strikethrough' || field['conditions'].present?)
 
         field.fetch('areas', []).each do |area|
           pdf = pdfs_index[area['attachment_uuid']]
@@ -258,6 +259,7 @@ module Submissions
 
           value = submitter.values[field['uuid']]
           value = field['default_value'] if field['type'] == 'heading'
+          value = field['default_value'] if field['type'] == 'strikethrough' && value.nil? && field['conditions'].blank?
 
           text_align = field.dig('preferences', 'align').to_s.to_sym.presence ||
                        (value.to_s.match?(RTL_REGEXP) ? :right : :left)
@@ -309,8 +311,8 @@ module Submissions
                 timezone = submitter.timezone || submitter.account.timezone if with_submitter_timezone
 
                 if with_signature_id_reason
-                  "#{reason_value ? "#{I18n.t('reason')}: " : ''}#{reason_value || I18n.t('digitally_signed_by')} " \
-                    "#{submitter.name}#{submitter.email.present? ? " <#{submitter.email}>" : ''}\n" \
+                  "#{"#{I18n.t('reason')}: " if reason_value}#{reason_value || I18n.t('digitally_signed_by')} " \
+                    "#{submitter.name}#{" <#{submitter.email}>" if submitter.email.present?}\n" \
                     "#{I18n.l(attachment.created_at.in_time_zone(timezone), format: :long)} " \
                     "#{TimeUtils.timezone_abbr(timezone, attachment.created_at)}"
                 else
@@ -448,8 +450,7 @@ module Submissions
                 cv.image(PdfIcons.paperclip_io, at: [0, 0], width: box.content_width)
               end
 
-              acc << HexaPDF::Layout::TextFragment.create("#{attachment.filename}\n", font:,
-                                                                                      font_size:)
+              acc << HexaPDF::Layout::TextFragment.create("#{attachment.filename}\n", font:, font_size:)
             end
 
             lines = layouter.fit(items, area['w'] * width, height).lines
@@ -566,6 +567,43 @@ module Submissions
 
               cell_layouter.fit([text], cell_width, [line_height, area['h'] * height].max)
                            .draw(canvas, x, height - (area['y'] * height))
+            end
+          when 'strikethrough'
+            scale = 1000.0 / width
+
+            line_width = 6.0 / scale
+            area_height = area['h'] * height
+
+            if area_height * scale < 40.0
+              canvas.tap do |c|
+                c.stroke_color(field.dig('preferences', 'color').presence || 'red')
+                c.line_width(line_width)
+                c.line(width * area['x'],
+                       height - (height * area['y']) - (area_height / 2),
+                       (width * area['x']) + (width * area['w']),
+                       height - (height * area['y']) - (area_height / 2))
+                c.stroke
+              end
+            else
+              canvas.tap do |c|
+                c.stroke_color(field.dig('preferences', 'color').presence || 'red')
+                c.line_width(line_width)
+                c.line((width * area['x']) + (line_width / 2),
+                       height - (height * area['y']) - (line_width / 2),
+                       (width * area['x']) + (width * area['w']) - (line_width / 2),
+                       height - (height * area['y']) - area_height + (line_width / 2))
+                c.stroke
+              end
+
+              canvas.tap do |c|
+                c.stroke_color(field.dig('preferences', 'color').presence || 'red')
+                c.line_width(line_width)
+                c.line((width * area['x']) + (line_width / 2),
+                       height - (height * area['y']) - area_height + (line_width / 2),
+                       (width * area['x']) + (width * area['w']) - (line_width / 2),
+                       height - (height * area['y']) - (line_width / 2))
+                c.stroke
+              end
             end
           else
             if field['type'] == 'date'
@@ -795,7 +833,7 @@ module Submissions
     def find_last_submitter(submission, submitter: nil)
       submission.submitters
                 .select(&:completed_at?)
-                .select { |e| submitter.nil? ? true : e.id != submitter.id && e.completed_at <= submitter.completed_at }
+                .select { |e| submitter.nil? || (e.id != submitter.id && e.completed_at <= submitter.completed_at) }
                 .max_by(&:completed_at)
     end
 

@@ -58,6 +58,12 @@
       :style="{ backgroundColor }"
     >
       <div class="flex items-center space-x-3">
+        <a
+          v-if="withLogo"
+          href="/"
+        >
+          <Logo />
+        </a>
         <Contenteditable
           v-if="withTitle"
           :model-value="template.name"
@@ -254,8 +260,12 @@
           :style="{ backgroundColor }"
         >
           <Upload
-            v-if="sortedDocuments.length && editable && withUploadButton"
+            v-if="editable && withUploadButton"
+            v-show="sortedDocuments.length"
+            ref="upload"
             :accept-file-types="acceptFileTypes"
+            :authenticity-token="authenticityToken"
+            :with-google-drive="withGoogleDrive"
             :template-id="template.id"
             @success="updateFromUpload"
           />
@@ -291,6 +301,8 @@
               v-if="withUploadButton"
               :template-id="template.id"
               :accept-file-types="acceptFileTypes"
+              :with-google-drive="withGoogleDrive"
+              @click-google-drive="$refs.upload.openGoogleDriveModal()"
               @success="updateFromUpload"
             />
             <button
@@ -362,6 +374,8 @@
                 v-if="withUploadButton"
                 :template-id="template.id"
                 :accept-file-types="acceptFileTypes"
+                :authenticity-token="authenticityToken"
+                :with-google-drive="withGoogleDrive"
                 @success="updateFromUpload"
               />
               <button
@@ -396,7 +410,10 @@
           :style="{ backgroundColor }"
         >
           <div class="bg-base-200 rounded-lg p-5 text-center space-y-4 draw-field-container">
-            <p>
+            <p v-if="(drawField?.type || drawFieldType) === 'strikethrough'">
+              {{ t('draw_strikethrough_the_document') }}
+            </p>
+            <p v-else>
               {{ t('draw_field_on_the_document') }}
             </p>
             <div>
@@ -407,7 +424,7 @@
                 {{ t('cancel') }}
               </button>
               <a
-                v-if="!drawField && !drawOption && !['stamp', 'signature', 'initials', 'heading'].includes(drawField?.type || drawFieldType)"
+                v-if="!drawField && !drawOption && !['stamp', 'signature', 'initials', 'heading', 'strikethrough'].includes(drawField?.type || drawFieldType)"
                 href="#"
                 class="link block mt-3 text-sm"
                 @click.prevent="[addField(drawFieldType), drawField = null, drawOption = null, withSelectedFieldType ? '' : drawFieldType = '', showDrawField = false]"
@@ -757,6 +774,11 @@ export default {
       required: false,
       default: false
     },
+    withGoogleDrive: {
+      type: Boolean,
+      required: false,
+      default: false
+    },
     onlyDefinedFields: {
       type: Boolean,
       required: false,
@@ -1078,6 +1100,11 @@ export default {
         }
       }
 
+      if (field.type === 'strikethrough') {
+        field.readonly = true
+        field.default_value = true
+      }
+
       if (type === 'signature' && [true, false].includes(this.withSignatureId)) {
         field.preferences ||= {}
         field.preferences.with_signature_id = this.withSignatureId
@@ -1351,6 +1378,9 @@ export default {
       } else if (type === 'initials') {
         area.w = pageMask.clientWidth / 10 / pageMask.clientWidth
         area.h = (pageMask.clientWidth / 35 / pageMask.clientWidth)
+      } else if (type === 'strikethrough') {
+        area.w = pageMask.clientWidth / 5 / pageMask.clientWidth
+        area.h = (pageMask.clientWidth / 70 / pageMask.clientWidth)
       } else {
         area.w = pageMask.clientWidth / 5 / pageMask.clientWidth
         area.h = (pageMask.clientWidth / 35 / pageMask.clientWidth)
@@ -1494,8 +1524,12 @@ export default {
           field.default_value = '{{date}}'
         }
 
-        if (['stamp', 'heading'].includes(field.type)) {
+        if (['stamp', 'heading', 'strikethrough'].includes(field.type)) {
           field.readonly = true
+
+          if (field.type === 'strikethrough') {
+            field.default_value = true
+          }
         }
 
         if (field.type === 'date') {
@@ -1582,6 +1616,11 @@ export default {
           baseArea = {
             w: area.maskW / 10 / area.maskW,
             h: area.maskW / 35 / area.maskW
+          }
+        } else if (fieldType === 'strikethrough') {
+          baseArea = {
+            w: area.maskW / 5 / area.maskW,
+            h: area.maskW / 70 / area.maskW
           }
         } else {
           baseArea = {
@@ -1731,8 +1770,9 @@ export default {
     },
     onDocumentReplace (data) {
       const { replaceSchemaItem, schema, documents } = data
+      const { google_drive_file_id, ...cleanedReplaceSchemaItem } = replaceSchemaItem
 
-      this.template.schema.splice(this.template.schema.indexOf(replaceSchemaItem), 1, { ...replaceSchemaItem, ...schema[0] })
+      this.template.schema.splice(this.template.schema.indexOf(replaceSchemaItem), 1, { ...cleanedReplaceSchemaItem, ...schema[0] })
       this.template.documents.push(...documents)
 
       if (data.fields) {
