@@ -29,18 +29,29 @@ Rails.application.routes.draw do
   end
 
   namespace :api, defaults: { format: :json } do
+    get 'test', to: 'health_check#status'
     resource :user, only: %i[show]
     resources :attachments, only: %i[create]
     resources :submitter_email_clicks, only: %i[create]
     resources :submitter_form_views, only: %i[create]
     resources :submitters, only: %i[index show update]
+
+
     resources :submissions, only: %i[index show create destroy] do
+      collection do
+        post :create_link_only
+        post :create_and_complete
+        post :custom_submissions, to: 'custom_submissions#create'
+      end
+
       resources :documents, only: %i[index], controller: 'submission_documents'
       collection do
         resources :init, only: %i[create], controller: 'submissions'
         resources :emails, only: %i[create], controller: 'submissions', as: :submissions_emails
       end
     end
+
+
     resources :templates, only: %i[update show index destroy] do
       resources :clone, only: %i[create], controller: 'templates_clone'
       resources :submissions, only: %i[index create]

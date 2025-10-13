@@ -2,9 +2,9 @@
 <% prefillable_fields = @template.fields.select { |f| f['prefillable'] } %>
 <% only_detailed = require_phone_2fa || prefillable_fields.present? %>
 <%= render 'shared/turbo_modal_large', title: params[:selfsign] ? t('add_recipients') : t('add_new_recipients') do %>
-  
+
   <!-- Remove the toggle-visible section entirely -->
-  
+
   <div class="px-5 mb-5 mt-4">
     <% unless only_detailed %>
       <!-- Show email form by default, remove hidden class -->

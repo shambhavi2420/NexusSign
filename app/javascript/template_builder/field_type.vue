@@ -112,8 +112,22 @@ export default {
         cells: this.t('cells'),
         stamp: this.t('stamp'),
         payment: this.t('payment'),
-        phone: this.t('phone'),
-        verification: this.t('verify_id')
+        verification: this.t('verify_id'),
+        candidateprofession: 'Candidate Profession',
+        candidatespecialty: 'Candidate Specialty',
+        candidatefullname: 'Candidate Full Name',
+        candidatelastname: 'Candidate Last Name',
+        candidatefirstname: 'Candidate First Name',
+        candidateemail: 'Candidate Email',
+        candidateaddress: 'Candidate Address',
+        candidatecity: 'Candidate City',
+        candidatestate: 'Candidate State',
+        candidatezip: 'Candidate Zipcode',
+        candidatessn: 'Candidate SSN',
+        candidateavailablefromdate: 'Candidate Available From Date',
+        candidateprimaryphone: 'Candidate Primary Phone',
+        candidateprimaryprofession: 'Candidate Primary Profession',
+        candidateprimaryspecialty: 'Candidate Primary Specialty'
       }
     },
     fieldLabels () {
@@ -132,8 +146,23 @@ export default {
         cells: this.t('cells_field'),
         stamp: this.t('stamp_field'),
         payment: this.t('payment_field'),
-        phone: this.t('phone_field'),
-        verification: this.t('verify_id')
+        verification: this.t('verify_id'),
+        candidateprofession: 'Candidate Profession',
+        candidatespecialty: 'Candidate Specialty',
+        candidatefullname: 'Candidate Full Name',
+        candidatelastname: 'Candidate Last Name',
+        candidatefirstname: 'Candidate First Name',
+        candidateemail: 'Candidate Email',
+        candidateaddress: 'Candidate Address',
+        candidatecity: 'Candidate City',
+        candidatestate: 'Candidate State',
+        candidatezip: 'Candidate Zipcode',
+        candidatessn: 'Candidate SSN',
+        candidateavailablefromdate: 'Candidate Available From Date',
+        candidateprimaryphone: 'Candidate Primary Phone',
+        candidateprimaryprofession: 'Candidate Primary Profession',
+        candidateprimaryspecialty: 'Candidate Primary Specialty'
+
       }
     },
     fieldIcons () {
@@ -154,8 +183,22 @@ export default {
         cells: IconColumns3,
         stamp: IconRubberStamp,
         payment: IconCreditCard,
-        phone: IconPhoneCheck,
-        verification: IconId
+        verification: IconId,
+        candidateprofession: IconTextSize,
+        candidatespecialty: IconTextSize,
+        candidatefullname: IconTextSize,
+        candidatelastname: IconTextSize,
+        candidatefirstname: IconTextSize,
+        candidateemail: IconTextSize,
+        candidateaddress: IconTextSize,
+        candidatecity: IconTextSize,
+        candidatestate: IconTextSize,
+        candidatezip: IconTextSize,
+        candidatessn: IconSquareNumber1,
+        candidateavailablefromdate: IconCalendarEvent,
+        candidateprimaryphone: IconSquareNumber1,
+        candidateprimaryprofession: IconTextSize,
+        candidateprimaryspecialty: IconTextSize
       }
     },
     fieldIconsSorted () {

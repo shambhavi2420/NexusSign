@@ -190,10 +190,10 @@ module Submissions
                                                                   padding: [15, 0, 8, 0],
                                                                   position: :float)
 
-        if show_verify?(submission)
-          column.formatted_text([{ link: verify_url, text: I18n.t('verify'), style: :link }],
-                                font_size: 9, padding: [15, 0, 10, 0], position: :float, text_align: :right)
-        end
+#         if show_verify?(submission)
+#           column.formatted_text([{ link: verify_url, text: I18n.t('verify'), style: :link }],
+#                                 font_size: 9, padding: [15, 0, 10, 0], position: :float, text_align: :right)
+#         end
       end
 
       composer.draw_box(divider)
@@ -329,7 +329,7 @@ module Submissions
           submitter_field_counters[field['type']] += 1
 
           next if field['submitter_uuid'] != submitter.uuid
-          next if field['type'] == 'heading'
+          next if field['type'] == 'heading' || field['type'] == 'strikethrough'
           next if !with_audit_values && !field['type'].in?(%w[signature initials])
           next if skip_grouped_field_uuids[field['uuid']]
 
@@ -481,7 +481,7 @@ module Submissions
 
     def select_attachments(submitter)
       original_documents = submitter.submission.schema_documents.preload(:blob)
-      is_more_than_two_images = original_documents.count(&:image?) > 1
+      is_more_than_two_images = original_documents.many?(&:image?)
 
       submitter.documents.preload(:blob).reject do |attachment|
         is_more_than_two_images &&
@@ -496,15 +496,7 @@ module Submissions
     end
 
     def add_logo(column, _submission = nil)
-      column.image(PdfIcons.logo_io, width: 40, height: 40, position: :float)
 
-      column.formatted_text([{ text: 'DocuSeal',
-                               link: Docuseal::PRODUCT_EMAIL_URL }],
-                            font_size: 20,
-                            font: [FONT_NAME, { variant: :bold }],
-                            width: 100,
-                            padding: [5, 0, 0, 8],
-                            position: :float, text_align: :left)
     end
 
     def r
