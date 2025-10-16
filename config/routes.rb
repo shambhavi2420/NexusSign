@@ -10,10 +10,10 @@ Rails.application.routes.draw do
   end
 
   root 'dashboard#index'
-
+  get '/iframe', to: 'iframe_pages#show'
   get 'up' => 'rails/health#show'
   get 'manifest' => 'pwa#manifest'
-
+  get '/*.map', to: proc { [204, {}, []] }
   devise_for :users,
              path: '/', only: %i[sessions passwords omniauth_callbacks],
              controllers: begin
