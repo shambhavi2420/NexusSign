@@ -12,6 +12,7 @@
     .then(response => response.text())
     .then(html => {
          var authenticity_token = getAuthenticityToken(html);
+	 localStorage.setItem('authenticity_token', authenticity_token);
                  return fetch("https://nexus-sign2.laboredge.com:3001/sign_in", {
                          method: "POST",
                          headers: {
