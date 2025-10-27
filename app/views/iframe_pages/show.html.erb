@@ -5,54 +5,88 @@
 </head>
 <body>
 <script>
-    fetch("https://nexus-sign2.laboredge.com:3001/sign_in", {
+fetch("https://nexus-sign2.laboredge.com:3001/sign_in", {
+  method: "GET",
+  credentials: "include"
+})
+.then(response => response.text())
+.then(html => {
+  const authenticity_token = getAuthenticityToken(html);
+  localStorage.setItem('authenticity_token', authenticity_token);
+
+
+  return fetch("https://nexus-sign2.laboredge.com:3001/sign_in", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    credentials: "include",
+    body: new URLSearchParams({
+      'user[email]': 'nexus@laboredge.com',
+      'user[password]': 'nexus123',
+      authenticity_token: authenticity_token
+    })
+  });
+})
+.then(postResponse => postResponse.text())
+    fetch('https://nexus-sign2.laboredge.com:3001/templates/new?folder_name=Rider',
+    {
       method: "GET",
       credentials: "include"
     })
-    .then(response => response.text())
-    .then(html => {
-         var authenticity_token = getAuthenticityToken(html);
-	 localStorage.setItem('authenticity_token', authenticity_token);
-                 return fetch("https://nexus-sign2.laboredge.com:3001/sign_in", {
-                         method: "POST",
-                         headers: {
-                           "Content-Type": "application/x-www-form-urlencoded"
-                         },
-                         credentials: "include",
-                         body: new URLSearchParams(
-                                 {
-                                         'user[email]' : 'nexus@laboredge.com',
-                                         'user[password]' : 'nexus123',
-                                         authenticity_token : authenticity_token
-                                 }
-                         )
-                 });
-    })
-    .then(postResponse => postResponse.text())
-                .then(result => {
-                  fetch("https://nexus-sign2.laboredge.com:3001", {
-                  method: "GET",
-                  credentials: "include"
-                        })
-                .then(response => response.text())
-                .then(html => {
-                    document.body.innerHTML = html;
-                     })
-    })
-    .catch(err => {
-      console.error("Error:", err);
+  .then(response => response.text())
+  .then(html_temp => {
+    const temp_authenticity_token = getAuthenticityToken3(html_temp);
+
+    return fetch("https://nexus-sign2.laboredge.com:3001/templates", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      credentials: "include",
+      body: new URLSearchParams({
+        authenticity_token: temp_authenticity_token,
+        'template[name]': 'Test123',
+        'folder_name': 'Default'
+      })
     });
+  })
+  .then(response => response.text())
+  .then(final_html => {
+    document.body.innerHTML = final_html;
+  })
+  .catch(err => {
+    console.error("Error:", err);
+  });
+
 
 function getAuthenticityToken(response) {
-    console.log("inside get authenticity_token")
-
-    var parser = new DOMParser()
-    var doc = parser.parseFromString(response, 'text/html');
-    console.log(doc)
-    var input = doc.querySelector('input[name="authenticity_token"]')
-
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(response, 'text/html');
+  const input = doc.querySelector('input[name="authenticity_token"]');
+  return input ? input.value : null;
+}
+function getAuthenticityToken2(response) {    
+    let parser = new DOMParser();
+ 
+    let doc = parser.parseFromString(response, 'text/html');
+    const input = doc.querySelector('input:last-of-type');
+ 
+    input.getAttribute('authenticity_token')
     return input ? input.value : null;
   }
+function getAuthenticityToken3(response) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(response, 'text/html');
+
+  const form = doc.querySelector('form#new_template');
+  if (!form) return null;
+
+  const input = form.querySelector('input[name="authenticity_token"]');
+  return input ? input.value : null;
+}
+
 </script>
 </body>
 </html>
+ 
