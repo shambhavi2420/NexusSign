@@ -172,7 +172,7 @@
                 width="22"
               />
               <span class="hidden md:inline">
-                {{ t('save') }}
+                {{ t('Update Template') }}
               </span>
             </button>
             <div class="dropdown dropdown-end">
@@ -1882,36 +1882,53 @@ export default {
         }
       }
     },
-    onSaveClick () {
-      if (!this.isAllRequiredFieldsAdded) {
-        const fields = this.defaultRequiredFields?.filter((f) => {
-          return !this.template.fields?.some((field) => field.name === f.name)
-        })
+onSaveClick () {
+  if (!this.isAllRequiredFieldsAdded) {
+    const fields = this.defaultRequiredFields?.filter((f) => {
+      return !this.template.fields?.some((field) => field.name === f.name)
+    })
 
-        if (fields?.length) {
-          return alert(this.t('add_all_required_fields_to_continue') + ': ' + fields.map((f) => f.name).join(', '))
-        }
-      }
+    if (fields?.length) {
+      return alert(this.t('add_all_required_fields_to_continue') + ': ' + fields.map((f) => f.name).join(', '))
+    }
+  }
 
-      if (!this.template.fields.length) {
-        alert(this.t('please_draw_fields_to_prepare_the_document'))
-      } else {
-        const submitterWithoutFields =
-          this.template.submitters.find((submitter) => !this.template.fields.some((f) => f.submitter_uuid === submitter.uuid))
+  if (!this.template.fields.length) {
+    alert(this.t('please_draw_fields_to_prepare_the_document'))
+  } else {
+    const submitterWithoutFields =
+      this.template.submitters.find((submitter) => !this.template.fields.some((f) => f.submitter_uuid === submitter.uuid))
 
-        if (submitterWithoutFields) {
-          alert(this.t('please_add_fields_for_the_submitter_name_or_remove_the_submitter_name_if_not_needed').replaceAll('{submitter_name}', submitterWithoutFields.name))
-        } else {
-          this.isSaving = true
+    if (submitterWithoutFields) {
+      alert(this.t('please_add_fields_for_the_submitter_name_or_remove_the_submitter_name_if_not_needed').replaceAll('{submitter_name}', submitterWithoutFields.name))
+    } else {
+      this.isSaving = true
 
-          this.save().then(() => {
-            window.Turbo.visit(`/templates/${this.template.id}`)
-          }).finally(() => {
-            this.isSaving = false
-          })
-        }
-      }
-    },
+      this.save().then(() => {
+        this.showToast('success')
+      }).finally(() => {
+        this.isSaving = false
+      })
+    }
+  }
+},
+showToast(type) {
+  const toast = document.createElement('div')
+  toast.className = 'toast toast-top toast-end z-[9999]'
+  toast.style.cssText = 'position: fixed; top: 80px; right: 20px;'
+  toast.innerHTML = `
+    <div class="alert alert-${type} shadow-lg">
+      <span>${this.t('Template Updated Successfully!') || 'Template Updated Successfully!'}</span>
+    </div>
+  `
+  document.body.appendChild(toast)
+  
+  setTimeout(() => {
+    toast.style.opacity = '0'
+    toast.style.transition = 'opacity 0.3s'
+    setTimeout(() => toast.remove(), 300)
+  }, 3000)
+},
     scrollToArea (area) {
       const documentRef = this.documentRefs.find((a) => a.document.uuid === area.attachment_uuid)
 

@@ -11,6 +11,8 @@ Rails.application.routes.draw do
 
   root 'dashboard#index'
   get '/iframe', to: 'iframe_pages#show'
+  get '/iframe/edit-template', to: 'iframe_pages#edit_template'
+  get '/iframe/create-template', to: 'iframe_pages#create_template'
   get 'up' => 'rails/health#show'
   get 'manifest' => 'pwa#manifest'
   get '/*.map', to: proc { [204, {}, []] }

@@ -1,38 +1,41 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Docuseal e-sign</title>
+<title>edit Docuseal e-sign</title>
 </head>
 <body>
 <script>
 
-
 configDocusealByAutoSign();
-
 
 window.addEventListener('message', (event) => {
   console.log("message from IFRAME:", event.origin);
 
-  if (event.origin === "https://sf-parent.laboredge.com") {
+  if (event.origin === "https://sf-new-uat.laboredge.com") {
     console.log("Received message from parent:", event.data);
-    	
-	 // window.parent.postMessage(localStorage.getItem('location'), event.origin);
   } else {
     console.warn("Received message from an untrusted origin:", event.origin);
   }
 });
 
-
 async function configDocusealByAutoSign(){
- try {
+  // Get parameters from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const templateId = urlParams.get('template_id');
+  
+  
+  console.log('Using templateId:', templateId);
+
+
+  try {
     const signIn_v1 = await fetch("https://nexus-sign2.laboredge.com:3001/sign_in");
     const html = await signIn_v1.text();
     const authenticity_token = getAuthenticityToken(html);
-    
+
     const signIn_v2 = await fetch("https://nexus-sign2.laboredge.com:3001/sign_in", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
       },
       credentials: "include",
       body: new URLSearchParams({
@@ -42,9 +45,15 @@ async function configDocusealByAutoSign(){
       })
     });
     const login_User = await signIn_v2.text();
+	
 
-    const template_v1 = await fetch('https://nexus-sign2.laboredge.com:3001/templates/new?folder_name=Rider');
+	
+
+  
+
+    const template_v1 = await fetch(`https://nexus-sign2.laboredge.com:3001/templates/${templateId}/edit`);
     const html_temp = await template_v1.text();
+	/*
     const temp_authenticity_token = getAuthenticityToken3(html_temp);
 
     const template_v2 = await fetch("https://nexus-sign2.laboredge.com:3001/templates", {
@@ -55,19 +64,20 @@ async function configDocusealByAutoSign(){
       credentials: "include",
       body: new URLSearchParams({
         authenticity_token: temp_authenticity_token,
-        'template[name]': 'Test123',
-        'folder_name': 'Default'
+        'template[name]': templateName,
+        'folder_name': folderName
       })
     });
 
-    localStorage.setItem('location',template_v2.url);
-	console.log("localstorage template_v2 is done",template_v2);
-    const final_html = await template_v2.text();
+    localStorage.setItem('location', template_v2.url);
+    console.log("localstorage template_v2 is done", template_v2);
+	*/
 
-      window.parent.postMessage(localStorage.getItem('location'), "https://sf-parent.laboredge.com");
-    return document.body.innerHTML = final_html;
 
-  }catch (error) {
+    
+    return document.body.innerHTML = html_temp;
+
+  } catch (error) {
     console.error('Error fetching data:', error);
   } finally {
     console.log('Fetch operation completed.');
@@ -80,22 +90,20 @@ function getAuthenticityToken(response) {
   const input = doc.querySelector('input[name="authenticity_token"]');
   return input ? input.value : null;
 }
-function getAuthenticityToken2(response) {    
-    let parser = new DOMParser();
- 
-    let doc = parser.parseFromString(response, 'text/html');
-    const input = doc.querySelector('input:last-of-type');
- 
-    input.getAttribute('authenticity_token')
-    return input ? input.value : null;
-  }
+
+function getAuthenticityToken2(response) {
+  let parser = new DOMParser();
+  let doc = parser.parseFromString(response, 'text/html');
+  const input = doc.querySelector('input:last-of-type');
+  input.getAttribute('authenticity_token')
+  return input ? input.value : null;
+}
+
 function getAuthenticityToken3(response) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(response, 'text/html');
-
   const form = doc.querySelector('form#new_template');
   if (!form) return null;
-
   const input = form.querySelector('input[name="authenticity_token"]');
   return input ? input.value : null;
 }
@@ -103,4 +111,3 @@ function getAuthenticityToken3(response) {
 </script>
 </body>
 </html>
- 
