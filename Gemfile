@@ -13,6 +13,8 @@ gem 'cancancan'
 gem 'csv'
 gem 'csv-safe'
 gem 'devise'
+gem 'doorkeeper', '~> 5.7'
+gem 'doorkeeper-jwt'
 gem 'devise-two-factor'
 gem 'dotenv', require: false
 gem 'email_typo'

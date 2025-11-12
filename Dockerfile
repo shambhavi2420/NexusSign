@@ -50,7 +50,23 @@ ENV OPENSSL_CONF=/app/openssl_legacy.cnf
 
 WORKDIR /app
 
-RUN echo '@edge https://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories && apk add --no-cache sqlite-dev libpq-dev mariadb-dev vips-dev@edge yaml-dev redis libheif@edge vips-heif@edge gcompat ttf-freefont && mkdir /fonts && rm /usr/share/fonts/freefont/FreeSans.otf
+RUN echo '@edge https://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories && \
+    echo '@edgemain https://dl-cdn.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories && \
+    apk upgrade && \
+    apk add --no-cache \
+        sqlite-dev \
+        libpq-dev \
+        mariadb-dev \
+        vips-dev@edge \
+        yaml-dev \
+        redis \
+        libheif@edge \
+        vips-heif@edge \
+        gcompat \
+        ttf-freefont \
+        libdeflate@edge && \
+    mkdir /fonts && \
+    rm /usr/share/fonts/freefont/FreeSans.otf
 
 RUN echo $'.include = /etc/ssl/openssl.cnf\n\
 \n\
@@ -66,7 +82,11 @@ activate = 1' >> /app/openssl_legacy.cnf
 
 COPY ./Gemfile ./Gemfile.lock ./
 
-RUN apk add --no-cache build-base && bundle install && apk del --no-cache build-base && rm -rf ~/.bundle /usr/local/bundle/cache && ruby -e "puts Dir['/usr/local/bundle/**/{spec,rdoc,resources/shared,resources/collation,resources/locales}']" | xargs rm -rf
+RUN apk add --no-cache build-base && \
+    bundle install && \
+    apk del --no-cache build-base && \
+    rm -rf ~/.bundle /usr/local/bundle/cache && \
+    ruby -e "puts Dir['/usr/local/bundle/**/{spec,rdoc,resources/shared,resources/collation,resources/locales}']" | xargs rm -rf
 
 COPY ./bin ./bin
 COPY ./app ./app
@@ -85,8 +105,8 @@ COPY --from=download /pdfium-linux/lib/libpdfium.so /usr/lib/libpdfium.so
 COPY --from=download /pdfium-linux/licenses/pdfium.txt /usr/lib/libpdfium-LICENSE.txt
 COPY --from=webpack /app/public/packs ./public/packs
 
-RUN ln -s /fonts /app/public/fonts
-RUN bundle exec bootsnap precompile --gemfile app/ lib/
+RUN ln -s /fonts /app/public/fonts && \
+    bundle exec bootsnap precompile --gemfile app/ lib/
 
 WORKDIR /data/docuseal
 ENV WORKDIR=/data/docuseal

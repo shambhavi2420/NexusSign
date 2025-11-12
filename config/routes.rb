@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
+  use_doorkeeper
   mount LetterOpenerWeb::Engine, at: '/letter_opener' if Rails.env.development?
 
   if !Docuseal.multitenant? && defined?(Sidekiq::Web)
@@ -10,6 +11,7 @@ Rails.application.routes.draw do
   end
 
   root 'dashboard#index'
+  get '/hello_world', to: 'hello_world#index'
   get '/iframe', to: 'iframe_pages#show'
   get '/iframe/edit-template', to: 'iframe_pages#edit_template'
   get '/iframe/create-template', to: 'iframe_pages#create_template'
