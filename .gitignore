@@ -2,3 +2,4 @@ pg_data/
 docuseal/
 .env
 *.rdb
+*.rdb
