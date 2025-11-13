@@ -11,7 +11,6 @@ Rails.application.routes.draw do
   end
 
   root 'dashboard#index'
-  get '/hello_world', to: 'hello_world#index'
   get '/iframe', to: 'iframe_pages#show'
   get '/iframe/edit-template', to: 'iframe_pages#edit_template'
   get '/iframe/create-template', to: 'iframe_pages#create_template'
@@ -34,6 +33,7 @@ Rails.application.routes.draw do
 
   namespace :api, defaults: { format: :json } do
     get 'test', to: 'health_check#status'
+    get 'hello_world', to: 'hello_world#index'
     resource :user, only: %i[show]
     resources :attachments, only: %i[create]
     resources :submitter_email_clicks, only: %i[create]
