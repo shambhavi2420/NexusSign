@@ -10,6 +10,7 @@ gem 'aws-sdk-secretsmanager', require: false
 gem 'azure-storage-blob', require: false
 gem 'bootsnap', require: false
 gem 'cancancan'
+gem 'rack-cors'
 gem 'csv'
 gem 'csv-safe'
 gem 'devise'
