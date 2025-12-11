@@ -40,7 +40,7 @@
 #
 class Template < ApplicationRecord
   DEFAULT_SUBMITTER_NAME = 'First Party'
-
+  PAD_AMOUNT = 2
   belongs_to :author, class_name: 'User'
   belongs_to :account
   belongs_to :folder, class_name: 'TemplateFolder'
@@ -87,4 +87,130 @@ class Template < ApplicationRecord
   def maybe_set_default_folder
     self.folder ||= account.default_template_folder
   end
+
+
+# Replace the entire create_from_pdf_tags method in app/models/template.rb
+
+def self.create_from_pdf_tags(account:, author:, name:, pdf_blob:, parsed_data:)
+  fields = parsed_data[:fields]
+  submitters = parsed_data[:submitters]
+  tag_positions = parsed_data[:tag_positions]
+  
+  # Ensure we have at least one submitter
+  if submitters.empty?
+    submitters = [{ name: 'First Party', uuid: SecureRandom.uuid }]
+  end
+  
+  # Build submitters array
+  template_submitters = submitters.map { |s| { 'name' => s[:name], 'uuid' => s[:uuid] } }
+  
+  # Create template without fields/schema first
+  template = create!(
+    account: account,
+    author: author,
+    name: name,
+    submitters: template_submitters,
+    schema: [],
+    fields: [],
+    source: 'api'
+  )
+  
+  # Process PDF: remove tags and create clean version
+  input_tempfile = Tempfile.new(['input', '.pdf'], encoding: 'ascii-8bit')
+  input_tempfile.binmode
+  input_tempfile.write(pdf_blob)
+  input_tempfile.rewind
+  
+  output_tempfile = Tempfile.new(['output', '.pdf'], encoding: 'ascii-8bit')
+  output_tempfile.binmode
+  
+  # Remove tags by overlaying white rectangles
+  if tag_positions.any?
+    PdfFieldParser.remove_tags_and_add_fields(
+      input_tempfile.path,
+      output_tempfile.path,
+      parsed_data
+    )
+    output_tempfile.rewind
+    final_pdf_content = output_tempfile.read
+  else
+    final_pdf_content = pdf_blob
+  end
+  
+  # Create uploaded file for attachment
+  final_tempfile = Tempfile.new(['final', '.pdf'], encoding: 'ascii-8bit')
+  final_tempfile.binmode
+  final_tempfile.write(final_pdf_content)
+  final_tempfile.rewind
+  
+  uploaded_file = ActionDispatch::Http::UploadedFile.new(
+    tempfile: final_tempfile,
+    filename: "#{name}.pdf",
+    type: 'application/pdf'
+  )
+  
+  # Use existing attachment creation logic
+  documents = Templates::CreateAttachments.call(
+    template, 
+    { files: [uploaded_file] }, 
+    extract_fields: false
+  )
+  
+  attachment_uuid = documents.first.uuid
+  
+  # Build schema with actual attachment UUID
+  schema = documents.map { |doc| { 'attachment_uuid' => doc.uuid, 'name' => doc.filename.base } }
+  
+  # Build template fields with actual attachment_uuid
+  template_fields = fields.map do |field|
+    # Find submitter UUID for this field
+    submitter_uuid = if field[:role].present?
+      submitters.find { |s| s[:name] == field[:role] }&.dig(:uuid)
+    else
+      submitters.first[:uuid]
+    end
+    
+    # Build areas with the actual attachment_uuid
+    areas = field[:areas].map do |area|
+      {
+        'x' => area[:x],
+        'y' => area[:y],
+        'w' => area[:w],
+        'h' => area[:h],
+        'page' => area[:page],
+        'attachment_uuid' => attachment_uuid
+      }
+    end
+    
+    {
+      'uuid' => field[:uuid],
+      'name' => field[:name],
+      'type' => field[:type],
+      'required' => field[:required],
+      'readonly' => field[:readonly],
+      'submitter_uuid' => submitter_uuid,
+      'default_value' => field[:default_value],
+      'options' => field[:options],
+      'preferences' => field[:preferences] || {},
+      'areas' => areas
+    }.compact
+  end
+  
+  # Update template with schema and fields
+  template.update!(
+    schema: schema,
+    fields: template_fields
+  )
+  
+  # Cleanup
+  input_tempfile.close
+  input_tempfile.unlink
+  output_tempfile.close
+  output_tempfile.unlink
+  final_tempfile.close
+  final_tempfile.unlink
+  
+  template
+end
+
 end

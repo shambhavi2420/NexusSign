@@ -43,6 +43,7 @@ Rails.application.routes.draw do
 
     resources :submissions, only: %i[index show create destroy] do
       collection do
+        post :from_pdf 
         post :create_link_only
         post :create_and_complete
         post :custom_submissions, to: 'custom_submissions#create'

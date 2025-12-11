@@ -203,7 +203,111 @@ module Api
       Rollbar.warning(e) if defined?(Rollbar)
       render json: { error: e.message }, status: :unprocessable_content
     end
+    # Add this method to app/controllers/api/submissions_controller.rb
+# Place it after the create_and_complete method
 
+def from_pdf
+  authorize!(:create, Submission)
+  authorize!(:create, Template)
+  
+  # Validate params
+  unless params[:file].present? || params[:documents]&.first&.dig(:file).present?
+    return render json: { error: 'PDF file is required' }, status: :unprocessable_entity
+  end
+  
+  # Get file data
+  file_data = if params[:file].present?
+    params[:file]
+  else
+    params[:documents].first[:file]
+  end
+  
+  # Decode base64 if needed
+  pdf_content = if file_data.is_a?(String)
+    Base64.decode64(file_data)
+  else
+    file_data.read
+  end
+  
+  # Save to temp file for parsing
+  temp_file = Tempfile.new(['upload', '.pdf'])
+  temp_file.binmode
+  temp_file.write(pdf_content)
+  temp_file.rewind
+  
+  # Parse PDF tags
+  parsed_data = PdfFieldParser.call(temp_file.path)
+  
+  if parsed_data[:fields].empty?
+    temp_file.close
+    temp_file.unlink
+    return render json: { error: 'No field tags found in PDF' }, status: :unprocessable_entity
+  end
+  
+  # Create template from parsed data
+  template_name = params[:name] || params[:documents]&.first&.dig(:name) || 'PDF Template'
+  
+  template = Template.create_from_pdf_tags(
+    account: current_account,
+    author: current_user,
+    name: template_name,
+    pdf_blob: pdf_content,
+    parsed_data: parsed_data
+  )
+  
+  temp_file.close
+  temp_file.unlink
+  
+  # Create submission if submitters provided
+  if params[:submitters].present?
+    params[:template_id] = template.id
+    params[:send_email] = true unless params.key?(:send_email)
+    params[:send_sms] = false unless params.key?(:send_sms)
+    
+    submissions = create_submissions(template, params)
+    
+    submissions.each do |submission|
+      submission.submitters.each do |submitter|
+        assign_submitter_preferences(submitter, params)
+        Submitters::MaybeUpdateDefaultValues.call(submitter, current_user, fill_now: true)
+      end
+    end
+    
+    WebhookUrls.enqueue_events(submissions, 'submission.created')
+    Submissions.send_signature_requests(submissions)
+    SearchEntries.enqueue_reindex(submissions)
+    
+    render json: {
+      template_id: template.id,
+      template_name: template.name,
+      submissions: build_create_json(submissions)
+    }
+  else
+    # Just return template info
+    render json: {
+      template_id: template.id,
+      template_name: template.name,
+      fields_count: parsed_data[:fields].size,
+      submitters: parsed_data[:submitters].map { |s| s[:name] }
+    }
+  end
+  
+rescue PdfFieldParser::ParseError => e
+  Rollbar.warning(e) if defined?(Rollbar)
+  Rails.logger.error("PDF Parser Error: #{e.message}")
+  Rails.logger.error("Backtrace: #{e.backtrace.first(10).join("\n")}")
+  temp_file&.close
+  temp_file&.unlink
+  render json: { error: e.message }, status: :unprocessable_entity
+  
+rescue StandardError => e
+  Rollbar.error(e) if defined?(Rollbar)
+  Rails.logger.error("PDF Processing Error: #{e.class} - #{e.message}")
+  Rails.logger.error("Backtrace: #{e.backtrace.first(10).join("\n")}")
+  temp_file&.close
+  temp_file&.unlink
+  render json: { error: "Failed to process PDF: #{e.message}" }, status: :internal_server_error
+end
     #
     # Private Methods
     #

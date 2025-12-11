@@ -22,6 +22,7 @@ gem 'email_typo'
 gem 'faraday'
 gem 'faraday-follow_redirects'
 gem 'google-cloud-storage', require: false
+gem 'pdf-reader', '~> 2.12'
 gem 'hexapdf'
 gem 'image_processing'
 gem 'jwt'
