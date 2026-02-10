@@ -23,6 +23,7 @@ gem 'faraday'
 gem 'faraday-follow_redirects'
 gem 'google-cloud-storage', require: false
 gem 'pdf-reader', '~> 2.12'
+gem 'httparty'
 gem 'hexapdf'
 gem 'image_processing'
 gem 'jwt'
