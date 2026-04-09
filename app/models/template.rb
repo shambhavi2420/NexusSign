@@ -91,7 +91,7 @@ class Template < ApplicationRecord
 
 # Replace the entire create_from_pdf_tags method in app/models/template.rb
 
-def self.create_from_pdf_tags(account:, author:, name:, pdf_blob:, parsed_data:)
+def self.create_from_pdf_tags(account:, author:, name:, pdf_blob:, parsed_data:,folder: nil)
   fields = parsed_data[:fields]
   submitters = parsed_data[:submitters]
   tag_positions = parsed_data[:tag_positions]
@@ -104,17 +104,18 @@ def self.create_from_pdf_tags(account:, author:, name:, pdf_blob:, parsed_data:)
   # Build submitters array
   template_submitters = submitters.map { |s| { 'name' => s[:name], 'uuid' => s[:uuid] } }
   
-  # Create template without fields/schema first
-  template = create!(
-    account: account,
-    author: author,
-    name: name,
-    submitters: template_submitters,
-    schema: [],
-    fields: [],
-    source: 'api'
-  )
-  
+folder = TemplateFolder.find_or_create_by!(account_id: account.id, name: 'Tag Based Requests')
+
+template = create!(
+  account: account,
+  author: author,
+  name: name,
+  folder: folder,
+  submitters: template_submitters,
+  schema: [],
+  fields: [],
+  source: 'api'
+)  
   # Process PDF: remove tags and create clean version
   input_tempfile = Tempfile.new(['input', '.pdf'], encoding: 'ascii-8bit')
   input_tempfile.binmode

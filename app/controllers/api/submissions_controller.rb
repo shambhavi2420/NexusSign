@@ -200,6 +200,14 @@ module Api
     end
 
     def from_pdf
+      Rails.logger.info "=== FROM_PDF DEBUG START ==="
+      Rails.logger.info "X-Auth-Token: #{request.headers['X-Auth-Token']}"
+      Rails.logger.info "Current User: #{current_user.inspect}"
+      Rails.logger.info "Current User ID: #{current_user&.id}"
+      Rails.logger.info "Current Account: #{current_account.inspect}"
+      Rails.logger.info "Current Account ID: #{current_account&.id}"
+      Rails.logger.info "=== FROM_PDF DEBUG END ==="
+
       authorize!(:create, Submission)
       authorize!(:create, Template)
 
