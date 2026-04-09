@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 # == Schema Information
 #
 # Table name: submitters
@@ -56,9 +57,9 @@ class Submitter < ApplicationRecord
   has_many_attached :documents
   has_many_attached :attachments
   has_many_attached :preview_documents
-
   has_many :template_accesses, through: :submission
   has_many :email_events, as: :emailable, dependent: (Docuseal.multitenant? ? nil : :destroy)
+
   has_many :document_generation_events, dependent: :destroy
   has_many :submission_events, dependent: :destroy
   has_many :start_form_submission_events, -> { where(event_type: :start_form) },

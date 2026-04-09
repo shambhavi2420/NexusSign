@@ -42,7 +42,6 @@ module Api
         end
       end
 
-      # Correctly checks submitters for audit log generation
       if @submission.audit_trail_attachment.blank? && submitters.all?(&:completed_at?)
         @submission.audit_trail_attachment = Submissions::EnsureAuditGenerated.call(@submission)
       end
@@ -51,6 +50,10 @@ module Api
     end
 
     def create
+      # Support flat body style (submitter_email / submitter_role at top level)
+      # in addition to the standard nested submitters array.
+      normalize_flat_submitter_params! if params[:submitter_email].present? && params[:submitters].blank?
+
       Params::SubmissionCreateValidator.call(params)
 
       @template = Template.find_by(id: params[:template_id])
@@ -143,9 +146,6 @@ module Api
       render json: { error: e.message }, status: :unprocessable_content
     end
 
-    #
-    # MODIFIED: create_and_complete (Now replicates create_link_only but forces completion and uses async jobs)
-    #
     def create_and_complete
       Params::SubmissionCreateValidator.call(params)
 
@@ -158,12 +158,10 @@ module Api
         return render json: { error: 'Template does not contain fields' }, status: :unprocessable_content
       end
 
-      # 1. Prepare parameters for link-only creation and forced completion
       modified_hash = params.to_unsafe_hash.deep_dup
-      modified_hash[:send_email] = false # Replicates create_link_only behavior
-      modified_hash[:send_sms] = false   # Replicates create_link_only behavior
+      modified_hash[:send_email] = false
+      modified_hash[:send_sms] = false
 
-      # Inject 'completed: true' into *every* submitter hash to force completion
       if modified_hash[:submitters].present?
         modified_hash[:submitters] = modified_hash[:submitters].map { |s| s.to_h.merge(completed: true) }
       end
@@ -171,10 +169,8 @@ module Api
         modified_hash[:submission][:submitters] = modified_hash[:submission][:submitters].map { |s| s.to_h.merge(completed: true) }
       end
 
-      # Convert back to ActionController::Parameters
       modified_params = ActionController::Parameters.new(modified_hash)
 
-      # 2. Creation and Asynchronous Completion Processing
       ActiveRecord::Base.transaction do
         submissions = create_submissions(@template, modified_params)
 
@@ -187,7 +183,6 @@ module Api
             assign_submitter_preferences(submitter, params)
             Submitters::MaybeUpdateDefaultValues.call(submitter, current_user, fill_now: true)
 
-            # Process completion asynchronously (handles document generation, combined PDF, and audit log)
             if submitter.completed_at?
               ProcessSubmitterCompletionJob.perform_async('submitter_id' => submitter.id, 'send_invitation_email' => false)
             end
@@ -203,116 +198,126 @@ module Api
       Rollbar.warning(e) if defined?(Rollbar)
       render json: { error: e.message }, status: :unprocessable_content
     end
-    # Add this method to app/controllers/api/submissions_controller.rb
-# Place it after the create_and_complete method
 
-def from_pdf
-  authorize!(:create, Submission)
-  authorize!(:create, Template)
-  
-  # Validate params
-  unless params[:file].present? || params[:documents]&.first&.dig(:file).present?
-    return render json: { error: 'PDF file is required' }, status: :unprocessable_entity
-  end
-  
-  # Get file data
-  file_data = if params[:file].present?
-    params[:file]
-  else
-    params[:documents].first[:file]
-  end
-  
-  # Decode base64 if needed
-  pdf_content = if file_data.is_a?(String)
-    Base64.decode64(file_data)
-  else
-    file_data.read
-  end
-  
-  # Save to temp file for parsing
-  temp_file = Tempfile.new(['upload', '.pdf'])
-  temp_file.binmode
-  temp_file.write(pdf_content)
-  temp_file.rewind
-  
-  # Parse PDF tags
-  parsed_data = PdfFieldParser.call(temp_file.path)
-  
-  if parsed_data[:fields].empty?
-    temp_file.close
-    temp_file.unlink
-    return render json: { error: 'No field tags found in PDF' }, status: :unprocessable_entity
-  end
-  
-  # Create template from parsed data
-  template_name = params[:name] || params[:documents]&.first&.dig(:name) || 'PDF Template'
-  
-  template = Template.create_from_pdf_tags(
-    account: current_account,
-    author: current_user,
-    name: template_name,
-    pdf_blob: pdf_content,
-    parsed_data: parsed_data
-  )
-  
-  temp_file.close
-  temp_file.unlink
-  
-  # Create submission if submitters provided
-  if params[:submitters].present?
-    params[:template_id] = template.id
-    params[:send_email] = true unless params.key?(:send_email)
-    params[:send_sms] = false unless params.key?(:send_sms)
-    
-    submissions = create_submissions(template, params)
-    
-    submissions.each do |submission|
-      submission.submitters.each do |submitter|
-        assign_submitter_preferences(submitter, params)
-        Submitters::MaybeUpdateDefaultValues.call(submitter, current_user, fill_now: true)
+    def from_pdf
+      authorize!(:create, Submission)
+      authorize!(:create, Template)
+
+      unless params[:file].present? || params[:documents]&.first&.dig(:file).present?
+        return render json: { error: 'PDF file is required' }, status: :unprocessable_entity
       end
-    end
-    
-    WebhookUrls.enqueue_events(submissions, 'submission.created')
-    Submissions.send_signature_requests(submissions)
-    SearchEntries.enqueue_reindex(submissions)
-    
-    render json: {
-      template_id: template.id,
-      template_name: template.name,
-      submissions: build_create_json(submissions)
-    }
-  else
-    # Just return template info
-    render json: {
-      template_id: template.id,
-      template_name: template.name,
-      fields_count: parsed_data[:fields].size,
-      submitters: parsed_data[:submitters].map { |s| s[:name] }
-    }
-  end
-  
-rescue PdfFieldParser::ParseError => e
-  Rollbar.warning(e) if defined?(Rollbar)
-  Rails.logger.error("PDF Parser Error: #{e.message}")
-  Rails.logger.error("Backtrace: #{e.backtrace.first(10).join("\n")}")
-  temp_file&.close
-  temp_file&.unlink
-  render json: { error: e.message }, status: :unprocessable_entity
-  
-rescue StandardError => e
-  Rollbar.error(e) if defined?(Rollbar)
-  Rails.logger.error("PDF Processing Error: #{e.class} - #{e.message}")
-  Rails.logger.error("Backtrace: #{e.backtrace.first(10).join("\n")}")
-  temp_file&.close
-  temp_file&.unlink
-  render json: { error: "Failed to process PDF: #{e.message}" }, status: :internal_server_error
-end
-    #
-    # Private Methods
-    #
 
+      file_data = if params[:file].present?
+        params[:file]
+      else
+        params[:documents].first[:file]
+      end
+
+      pdf_content = if file_data.is_a?(String)
+        Base64.decode64(file_data)
+      else
+        file_data.read
+      end
+
+      temp_file = Tempfile.new(['upload', '.pdf'])
+      temp_file.binmode
+      temp_file.write(pdf_content)
+      temp_file.rewind
+
+      parsed_data = PdfFieldParser.call(temp_file.path)
+
+      if parsed_data[:fields].empty?
+        temp_file.close
+        temp_file.unlink
+        return render json: { error: 'No field tags found in PDF' }, status: :unprocessable_entity
+      end
+
+      template_name = params[:name] || params[:documents]&.first&.dig(:name) || 'PDF Template'
+
+      template = Template.create_from_pdf_tags(
+        account:     current_account,
+        author:      current_user,
+        name:        template_name,
+        pdf_blob:    pdf_content,
+        parsed_data: parsed_data
+      )
+
+      temp_file.close
+      temp_file.unlink
+
+      # Support flat body style (submitter_email at top level) for from_pdf too
+      normalize_flat_submitter_params! if params[:submitter_email].present? && params[:submitters].blank?
+
+      if params[:submitters].present?
+        params[:template_id] = template.id
+        params[:send_email]  = true unless params.key?(:send_email)
+        params[:send_sms]    = false unless params.key?(:send_sms)
+
+        submissions = create_submissions(template, params)
+
+        submissions.each do |submission|
+          submission.submitters.each do |submitter|
+            assign_submitter_preferences(submitter, params)
+            Submitters::MaybeUpdateDefaultValues.call(submitter, current_user, fill_now: true)
+          end
+        end
+
+        WebhookUrls.enqueue_events(submissions, 'submission.created')
+        Submissions.send_signature_requests(submissions)
+        SearchEntries.enqueue_reindex(submissions)
+
+        render json: {
+          template_id:   template.id,
+          template_name: template.name,
+          submissions:   build_create_json(submissions)
+        }
+      else
+        render json: {
+          template_id:   template.id,
+          template_name: template.name,
+          fields_count:  parsed_data[:fields].size,
+          submitters:    parsed_data[:submitters].map { |s| s[:name] }
+        }
+      end
+
+    rescue PdfFieldParser::ParseError => e
+      Rollbar.warning(e) if defined?(Rollbar)
+      Rails.logger.error("PDF Parser Error: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
+      temp_file&.close
+      temp_file&.unlink
+      render json: { error: e.message }, status: :unprocessable_entity
+
+    rescue StandardError => e
+      Rollbar.error(e) if defined?(Rollbar)
+      Rails.logger.error("PDF Processing Error: #{e.class} - #{e.message}\n#{e.backtrace.first(10).join("\n")}")
+      temp_file&.close
+      temp_file&.unlink
+      render json: { error: "Failed to process PDF: #{e.message}" }, status: :internal_server_error
+    end
+
+    # -------------------------------------------------------------------------
     private
+    # -------------------------------------------------------------------------
+
+    # Converts flat top-level submitter params into the standard nested
+    # submitters array so all downstream logic works unchanged.
+    #
+    # Flat keys supported (mirrors custom_submissions style):
+    #   submitter_email, submitter_role, submitter_name,
+    #   name, phone, external_id, application_key, metadata
+    def normalize_flat_submitter_params!
+      submitter_hash = {
+        'email'           => params[:submitter_email],
+        'name'            => params[:submitter_name].presence || params[:name].presence,
+        'role'            => params[:submitter_role].presence,
+        'phone'           => params[:phone].presence,
+        'external_id'     => params[:external_id].presence,
+        'application_key' => params[:application_key].presence,
+        'metadata'        => params[:metadata].present? ? params[:metadata].to_unsafe_h : {}
+      }.compact
+
+      params.merge!(submitters: [submitter_hash])
+    end
 
     def assign_submitter_preferences(submitter, params)
       submitter_attrs = find_submitter_params_for(submitter, params)
@@ -322,19 +327,16 @@ end
       submitter.preferences ||= {}
 
       if submitter_attrs[:values].present?
-        # Convert to hash using to_unsafe_h for ActionController::Parameters
         values_hash = submitter_attrs[:values].respond_to?(:to_unsafe_h) ? submitter_attrs[:values].to_unsafe_h : submitter_attrs[:values].to_h
 
         submitter.preferences['default_values'] = values_hash
 
-        # Save immediately so MaybeUpdateDefaultValues can read it
         submitter.save!
         submitter.reload
       end
     end
 
     def find_submitter_params_for(submitter, params)
-      # Handle different param structures
       submitters_array = if params[:submitters].present?
         params[:submitters]
       elsif params[:submission].present?
@@ -345,7 +347,6 @@ end
         []
       end
 
-      # Find matching submitter by email
       submitters_array.find { |s| s[:email] == submitter.email }
     end
 
@@ -378,9 +379,9 @@ end
         json =
           if submissions.size == 1
             {
-              id: submissions.first.id,
+              id:         submissions.first.id,
               submitters: json,
-              expire_at: submissions.first.expire_at,
+              expire_at:  submissions.first.expire_at,
               created_at: submissions.first.created_at
             }
           else
@@ -396,61 +397,57 @@ end
 
       json = submissions.flat_map do |submission|
         submission.submitters.map do |submitter|
-          # Get the base serialization
           serialized = Submitters::SerializeForApi.call(
             submitter,
             with_documents: true,
-            with_urls: true,
-            expires_at: expires_at,
-            params: params
+            with_urls:      true,
+            expires_at:     expires_at,
+            params:         params
           )
 
-          # Add document URLs
           document_urls = submitter.documents_attachments.map do |attachment|
             {
               filename: attachment.filename.to_s,
-              url: Rails.application.routes.url_helpers.rails_blob_url(
-                attachment,
-                host: request.base_url,
-                expires_in: expires_at
-              )
+              url:      Rails.application.routes.url_helpers.rails_blob_url(
+                          attachment,
+                          host:       request.base_url,
+                          expires_in: expires_at
+                        )
             }
           end
 
-          # Add combined document URL if exists
           combined_url = if submission.combined_document_attachment.present?
             Rails.application.routes.url_helpers.rails_blob_url(
               submission.combined_document_attachment,
-              host: request.base_url,
+              host:       request.base_url,
               expires_in: expires_at
             )
           end
 
-          # Add audit trail URL if exists
           audit_url = if submission.audit_trail_attachment.present?
             Rails.application.routes.url_helpers.rails_blob_url(
               submission.audit_trail_attachment,
-              host: request.base_url,
+              host:       request.base_url,
               expires_in: expires_at
             )
           end
 
           serialized.merge({
-            documents: document_urls,
+            documents:             document_urls,
             combined_document_url: combined_url,
-            audit_trail_url: audit_url,
-            status: 'completed'
+            audit_trail_url:       audit_url,
+            status:                'completed'
           }).compact
         end
       end
 
       if submissions.size == 1
         {
-          id: submissions.first.id,
-          slug: submissions.first.slug,
-          submitters: json,
-          expire_at: submissions.first.expire_at,
-          created_at: submissions.first.created_at,
+          id:           submissions.first.id,
+          slug:         submissions.first.slug,
+          submitters:   json,
+          expire_at:    submissions.first.expire_at,
+          created_at:   submissions.first.created_at,
           completed_at: submissions.first.submitters.first&.completed_at
         }
       else
@@ -458,28 +455,26 @@ end
       end
     end
 
-
     def create_submissions(template, params)
       is_send_email = !params[:send_email].in?(['false', false])
 
       if (emails = (params[:emails] || params[:email]).presence) &&
          (params[:submission].blank? && params[:submitters].blank?)
         Submissions.create_from_emails(template:,
-                                       user: current_user,
-                                       source: :api,
+                                       user:         current_user,
+                                       source:       :api,
                                        mark_as_sent: is_send_email,
                                        emails:,
                                        params:)
       else
-        # Use the passed-in params (which is ActionController::Parameters) for strong parameters and normalization
         normalized_params = submissions_params(params)
         submissions_attrs, attachments =
           Submissions::NormalizeParamUtils.normalize_submissions_params!(normalized_params, template)
 
         submissions = Submissions.create_from_submitters(
           template:,
-          user: current_user,
-          source: :api,
+          user:             current_user,
+          source:           :api,
           submitters_order: params[:submitters_order] || params[:order] || 'preserved',
           submissions_attrs:,
           params:
@@ -493,23 +488,20 @@ end
       end
     end
 
-    # Accepts an optional 'p' argument so we can use modified parameters
     def submissions_params(p = params)
-      # FIX: Removed the redundant outer array around the submitters block to avoid Ruby parser error
       permitted_attrs = [
         :send_email, :send_sms, :bcc_completed, :completed_redirect_url, :reply_to, :go_to_last,
         :require_phone_2fa, :expire_at, :name,
         {
           variables: {},
-          message: %i[subject body],
+          message:   %i[subject body],
           submitters: [:send_email, :send_sms, :completed_redirect_url, :uuid, :name, :email, :role,
-                        :completed, # Permitted key for completion status
-                        :phone, :application_key, :external_id, :reply_to, :go_to_last,
-                        :require_phone_2fa, :order,
-                        { metadata: {}, values: {}, roles: [], readonly_fields: [], message: %i[subject body],
-                          fields: [:name, :uuid, :default_value, :value, :title, :description,
-                                   :readonly, :required, :validation_pattern, :invalid_message,
-                                   { default_value: [], value: [], preferences: {}, validation: {} }] }] # Removed outer []
+                       :completed, :phone, :application_key, :external_id, :reply_to, :go_to_last,
+                       :require_phone_2fa, :order,
+                       { metadata: {}, values: {}, roles: [], readonly_fields: [], message: %i[subject body],
+                         fields: [:name, :uuid, :default_value, :value, :title, :description,
+                                  :readonly, :required, :validation_pattern, :invalid_message,
+                                  { default_value: [], value: [], preferences: {}, validation: {} }] }]
         }
       ]
 
