@@ -44,7 +44,9 @@
 #
 class User < ApplicationRecord
   ROLES = [
-    ADMIN_ROLE = 'admin'
+    ADMIN_ROLE = 'admin',
+    'editor',
+    'viewer'
   ].freeze
 
   EMAIL_REGEXP = /[^@;,<>\s]+@[^@;,<>\s]+/

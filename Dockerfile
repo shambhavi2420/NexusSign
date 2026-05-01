@@ -50,23 +50,23 @@ ENV OPENSSL_CONF=/app/openssl_legacy.cnf
 
 WORKDIR /app
 
-RUN echo '@edge https://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories && \
-    echo '@edgemain https://dl-cdn.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories && \
-    apk upgrade && \
-    apk add --no-cache \
-        sqlite-dev \
-        libpq-dev \
-        mariadb-dev \
-        vips-dev@edge \
-        yaml-dev \
-        redis \
-        libheif@edge \
-        vips-heif@edge \
-        gcompat \
-        ttf-freefont \
-        libdeflate@edge && \
+# Install core dependencies from stable repositories first
+RUN apk add --no-cache \
+    sqlite-dev \
+    libpq-dev \
+    mariadb-dev \
+    yaml-dev \
+    redis \
+    gcompat \
+    ttf-freefont && \
     mkdir /fonts && \
-    rm /usr/share/fonts/freefont/FreeSans.otf
+    rm -f /usr/share/fonts/freefont/FreeSans.otf
+
+# Install vips and libheif from stable Alpine repositories
+RUN apk add --no-cache vips-dev libheif vips-heif
+
+# Remove the problematic rm command for FreeSans.otf if it doesn't exist
+RUN rm -f /usr/share/fonts/freefont/FreeSans.otf || true
 
 RUN echo $'.include = /etc/ssl/openssl.cnf\n\
 \n\
