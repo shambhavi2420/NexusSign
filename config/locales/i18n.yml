@@ -1,25 +1,5 @@
 en: &en
   language_en: English
-  language_en-US: English (US)
-  language_en-GB: English (UK)
-  language_es-ES: Español
-  language_fr-FR: Français
-  language_pt-PT: Português
-  language_de-DE: Deutsch
-  language_nl-NL: Nederlands
-  language_es: Español
-  language_it: Italiano
-  language_de: Deutsch
-  language_fr: Français
-  language_pl: Polski
-  language_uk: Українська
-  language_cs: Čeština
-  language_pt: Português
-  language_he: עברית
-  language_nl: Nederlands
-  language_ar: العربية
-  language_ko: 한국어
-  language_ja: 日本語
   add_from_google_drive: Add from Google Drive
   or_add_from: Or add from
   upload_a_new_document: Upload a New Document
@@ -69,15 +49,15 @@ en: &en
   accessiable_by: Accessible by
   team_access: Team access
   document_download_filename_format: Document download filename format
-  docuseal_trusted_signature: DocuSeal Trusted Signature
+  docuseal_trusted_signature: NexusSign Trusted Signature
   hello_name: Hello %{name}
   you_are_invited_to_product_name: You are invited to %{product_name}
   you_have_been_invited_to_account_name_product_name_please_sign_up_using_the_link_below_: 'You have been invited to %{account_name} %{product_name}. Please sign up using the link below:'
   sent_using_product_name_in_testing_mode_html: 'Sent using NexusSign'
   sent_using_product_name_free_document_signing_html: 'Sent using NexusSign'
   sent_with_docuseal_pro_html: 'Sent using NexusSign'
-  show_send_with_docuseal_pro_attribution_in_emails_html: Show "Sent with <span class="link">DocuSeal Pro</span>" attribution in emails
-  sign_documents_with_trusted_certificate_provided_by_docu_seal_your_documents_and_data_are_never_shared_with_docu_seal_p_d_f_checksum_is_provided_to_generate_a_trusted_signature: Sign documents with trusted certificate provided by DocuSeal. Your documents and data are never shared with DocuSeal. PDF checksum is provided to generate a trusted signature.
+  show_send_with_docuseal_pro_attribution_in_emails_html: Show "Sent with <span class="link"></span>" attribution in emails
+  sign_documents_with_trusted_certificate_provided_by_docu_seal_your_documents_and_data_are_never_shared_with_docu_seal_p_d_f_checksum_is_provided_to_generate_a_trusted_signature: Sign documents with trusted certificate provided by NexusSign. PDF checksum is provided to generate a trusted signature.
   you_have_been_invited_to_submit_the_name_form: 'You have been invited to submit the "%{name}" form.'
   you_have_been_invited_to_sign_the_name: 'You have been invited to sign the "%{name}".'
   alternatively_you_can_review_and_download_your_copy_using_the_link_below: "Alternatively, you can review and download your copy using the link below:"
@@ -175,7 +155,7 @@ en: &en
   profile_details: Profile Details
   sign_up_with_google: Sign up with Google
   sign_up_with_microsoft: Sign up with Microsoft
-  by_creating_an_account_you_agree_to_our_html: 'By creating an account, you agree to our <a target="_blank" href="https://www.docuseal.com/privacy">Privacy Policy</a> and <a target="_blank" href="https://www.docuseal.com/terms">Terms of Service</a>.'
+  by_creating_an_account_you_agree_to_our_html: ''
   enter_email_to_continue: Enter email to continue
   account: Account
   preferences: Preferences
@@ -196,7 +176,7 @@ en: &en
   combine_completed_documents_and_audit_log: Combine completed documents and Audit Log
   salesforce_integration: Salesforce Integration
   salesforce_has_been_connected: Salesforce has been connected.
-  connect_salesforce_account_to_integrate_with_docuseal: Connect Salesforce account to integrate with DocuSeal
+  connect_salesforce_account_to_integrate_with_docuseal: Connect Salesforce account
   re_connect_salesforce: Re-connect Salesforce
   connect_salesforce: Connect Salesforce
   danger_zone: Danger Zone
@@ -225,7 +205,7 @@ en: &en
   resetting_password: Resetting password
   sign_in_with_name_account: 'Sign in with %{name} account'
   two_factor_code_from_authenticator_app: Two-Factor Code from Authenticator App
-  sign_up_in_docuseal_console_to_upgrade_on_premises_app_is_completely_standalone_console_is_used_only_to_manage_your_license: Sign up in DocuSeal Console to upgrade. On-premises app is completely standalone, Console is used only to manage your license.
+  sign_up_in_docuseal_console_to_upgrade_on_premises_app_is_completely_standalone_console_is_used_only_to_manage_your_license:  On-premises app is completely standalone, Console is used only to manage your license.
   send_from_email: Send from Email
   optional: optional
   save: Save
@@ -407,7 +387,7 @@ en: &en
   upgrade_to_send_unlimited_signature_requests: Upgrade to send unlimited signature requests
   add_without_sending: Add without sending
   upgade_now: Upgrade Now
-  send_signature_request_emails_without_limits_with_docuseal_pro: Send signature request emails without limits with DocuSeal Pro
+  send_signature_request_emails_without_limits_with_docuseal_pro: 
   count_emails_used: '%{count} emails used'
   has_been_connected: has been connected
   sms_not_configured: SMS not Configure
@@ -468,7 +448,7 @@ en: &en
   share_template_with_test_mode: Share template with Test mode
   share_template_with_all_tenants: Share template with all Tenants
   use_following_placeholders_text_: 'Use following placeholders text:'
-  users_count_total_users_count_pro_users_limit_was_reached_to_invite_additional_users_please_purchase_more_pro_user_seats_via_the_manage_plan_button: '%{users_count}/%{total_users_count} Pro users limit was reached. To invite additional users, please purchase more Pro user seats via the "Manage plan" button.'
+  users_count_total_users_count_pro_users_limit_was_reached_to_invite_additional_users_please_purchase_more_pro_user_seats_via_the_manage_plan_button: '%{users_count}/%{total_users_count} User Limit Reached. Contact Admin.'
   move_into_folder: Move Into Folder
   new_folder_name: New Folder Name
   new_subfolder_name: New Subfolder Name
@@ -508,7 +488,7 @@ en: &en
   new_user: New User
   unarchive: Unarchive
   last_session: Last session
-  unlock_more_user_roles_with_docuseal_pro: Unlock more user roles with DocuSeal Pro.
+  unlock_more_user_roles_with_docuseal_pro: 
   view_active: View Active
   team_account: Team account
   team_accounts: Team Accounts
@@ -821,8 +801,8 @@ en: &en
   reindex: Reindex
   build_search_index: Build Search Index
   require_two_factor_authentication_2fa_with_an_authenticator_app_e_g_google_authenticator_authy_all_users_signing_documents_must_pass_the_second_factor_verification_using_a_secure_code_in_addition_to_their_password: Require two-factor authentication (2FA) with an authenticator app (e.g., Google Authenticator, Authy). All users signing documents must pass the second factor verification using a secure code in addition to their password.
-  add_a_unique_signature_id_and_timestamp_to_each_signature_for_audit_and_traceability_purposes_along_with_the_timestamp_part_of_docuseals_21_cfr_part_11_compliance_settings: "Add a unique Signature ID and timestamp to each signature for audit and traceability purposes along with the timestamp. Part of DocuSeal's 21 CFR Part 11 compliance settings."
-  require_signer_to_provide_a_reason_for_signing_before_completing_their_signature_e_g_approvals_certifications_part_of_docuseals_21_cfr_part_11_compliance_settings: "Require signers to provide a reason for signing before completing their signature (e.g., approvals, certifications). Part of DocuSeal's 21 CFR Part 11 compliance settings."
+  add_a_unique_signature_id_and_timestamp_to_each_signature_for_audit_and_traceability_purposes_along_with_the_timestamp_part_of_docuseals_21_cfr_part_11_compliance_settings: "Add a unique Signature ID and timestamp to each signature for audit and traceability purposes along with the timestamp."
+  require_signer_to_provide_a_reason_for_signing_before_completing_their_signature_e_g_approvals_certifications_part_of_docuseals_21_cfr_part_11_compliance_settings: "Require signers to provide a reason for signing before completing their signature."
   allow_signers_to_create_signatures_by_typing_their_name_instead_of_drawing_or_uploading_one: Allow signers to create signatures by typing their name instead of drawing or uploading one.
   allow_signers_to_resubmit_forms_after_completion_useful_when_corrections_or_multiple_submissions_are_needed: Allow signers to resubmit forms after completion, useful when corrections or multiple submissions are needed.
   allow_recipients_to_decline_signing_a_document_the_decline_reason_notification_will_be_sent_to_the_signature_requester: Allow recipients to decline signing a document. The decline reason notification will be sent to the signature requester.

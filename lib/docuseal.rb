@@ -2,38 +2,38 @@
 
 module Docuseal
   URL_CACHE = ActiveSupport::Cache::MemoryStore.new
-  PRODUCT_URL = 'https://www.docuseal.com'
-  PRODUCT_EMAIL_URL = ENV.fetch('PRODUCT_EMAIL_URL', PRODUCT_URL)
-  NEWSLETTER_URL = "#{PRODUCT_URL}/newsletters".freeze
-  ENQUIRIES_URL = "#{PRODUCT_URL}/enquiries".freeze
-  PRODUCT_NAME = 'DocuSeal'
+  PRODUCT_URL = ''
+  PRODUCT_EMAIL_URL = ''
+  NEWSLETTER_URL = ''
+  ENQUIRIES_URL = ''
+  PRODUCT_NAME = 'NexusSign'
   DEFAULT_APP_URL = ENV.fetch('APP_URL', 'http://localhost:3000')
-  GITHUB_URL = 'https://github.com/docusealco/docuseal'
-  DISCORD_URL = 'https://discord.gg/qygYCDGck9'
-  TWITTER_URL = 'https://twitter.com/docusealco'
-  TWITTER_HANDLE = '@docusealco'
-  CHATGPT_URL = "#{PRODUCT_URL}/chat".freeze
-  SUPPORT_EMAIL = 'support@docuseal.com'
+  GITHUB_URL = ''
+  DISCORD_URL = ''
+  TWITTER_URL = ''
+  TWITTER_HANDLE = ''
+  CHATGPT_URL = ''
+  SUPPORT_EMAIL = ''
   HOST = ENV.fetch('HOST', 'localhost')
-  AATL_CERT_NAME = 'docuseal_aatl'
+  AATL_CERT_NAME = ''
   CONSOLE_URL = if Rails.env.development?
                   'http://console.localhost.io:3001'
                 elsif ENV['MULTITENANT'] == 'true'
                   "https://console.#{HOST}"
                 else
-                  'https://console.docuseal.com'
+                  ''
                 end
   CLOUD_URL = if Rails.env.development?
                 'http://localhost:3000'
               else
-                'https://docuseal.com'
+                ''
               end
   CDN_URL = if Rails.env.development?
               'http://localhost:3000'
             elsif ENV['MULTITENANT'] == 'true'
               "https://cdn.#{HOST}"
             else
-              'https://cdn.docuseal.com'
+              ''
             end
 
   CERTS = JSON.parse(ENV.fetch('CERTS', '{}'))
