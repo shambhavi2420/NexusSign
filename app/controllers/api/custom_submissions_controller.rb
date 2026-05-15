@@ -4,108 +4,163 @@ module Api
   class CustomSubmissionsController < ApiBaseController
     skip_authorization_check only: [:create]
 
+    # =========================================================================
+    # POST /api/custom_submissions
+    #
+    # Accepts a base64-encoded PDF and an array of submitters, draws per-signer
+    # signature boxes on the PDF (side-by-side for ≤3 signers on the last page;
+    # appended blank page for 4+ signers), creates a DocuSeal template with
+    # matching signature/date fields, and kicks off the ordered signing flow.
+    #
+    # Required params:
+    #   pdf_base64   – base64-encoded PDF binary
+    #   submitters   – array of { email:, role:, name:, phone:, ... }
+    #
+    # Optional params (mirror submissions#create):
+    #   filename, submitters_order, send_email, send_sms,
+    #   metadata, external_id, application_key
+    # =========================================================================
     def create
+      # ------------------------------------------------------------------
       # 1. Validate required parameters
-      required_params = %i[pdf_base64 submitter_email submitter_role]
-      missing_params = required_params.select { |p| params[p].blank? }
-
-      unless missing_params.empty?
-        return render json: { error: "Missing required parameters: #{missing_params.join(', ')}" },
+      # ------------------------------------------------------------------
+      if params[:pdf_base64].blank?
+        return render json: { error: 'Missing required parameter: pdf_base64' },
                       status: :bad_request
       end
 
+      if params[:submitters].blank? || !params[:submitters].is_a?(Array) && !params[:submitters].respond_to?(:to_unsafe_h)
+        return render json: { error: 'Missing required parameter: submitters (must be an array)' },
+                      status: :bad_request
+      end
+
+      submitters_array = params[:submitters].map do |s|
+        s.respond_to?(:to_unsafe_h) ? s.to_unsafe_h.with_indifferent_access : s.with_indifferent_access
+      end
+
+      if submitters_array.any? { |s| s[:email].blank? }
+        return render json: { error: 'Each submitter must have an email' },
+                      status: :bad_request
+      end
+
+      if submitters_array.any? { |s| s[:role].blank? }
+        return render json: { error: 'Each submitter must have a role' },
+                      status: :bad_request
+      end
+
+      # ------------------------------------------------------------------
       # 2. Authentication check
+      # ------------------------------------------------------------------
       unless current_account&.id && current_user&.id
         return render json: { error: 'Authentication failed: No valid account found' },
                       status: :unauthorized
       end
 
-      # 3. Process PDF — adds the blue signature box to the last page
-      #    Also returns the actual page count of the resulting PDF
-      modified_pdf_binary, total_pages = add_signature_labels(
-        params[:pdf_base64],
-        params[:submitter_email]
-      )
+      # ------------------------------------------------------------------
+      # 3. Process PDF — draw per-signer signature boxes
+      #    Returns [modified_pdf_binary, total_pages, box_layout]
+      #    box_layout is an array of { x:, y:, w:, h:, page: } per signer
+      #    (normalised DocuSeal coords) used for field placement.
+      # ------------------------------------------------------------------
+      modified_pdf_binary, total_pages, box_layout =
+        add_signature_boxes(params[:pdf_base64], submitters_array)
 
       ActiveRecord::Base.transaction do
-        # 4. Create template, passing the known page count so field placement is exact
+        # ----------------------------------------------------------------
+        # 4. Create template with one submitter entry per signer
+        # ----------------------------------------------------------------
         template = create_template_with_document(
           modified_pdf_binary,
           params[:filename],
-          params[:submitter_email],
-          total_pages
+          submitters_array,
+          total_pages,
+          box_layout
         )
 
-        # 5. Create submission
-        submissions = Submissions.create_from_emails(
-          template:     template,
-          user:         current_user,
-          source:       :api,
-          mark_as_sent: false,
-          emails:       params[:submitter_email],
-          params:       ActionController::Parameters.new(send_email: false, send_sms: false)
+        # ----------------------------------------------------------------
+        # 5. Build params compatible with Submissions.create_from_submitters
+        # ----------------------------------------------------------------
+        normalized_submitters = submitters_array.map do |s|
+          {
+            'email'           => s[:email],
+            'name'            => s[:name].presence,
+            'role'            => s[:role],
+            'phone'           => s[:phone].presence,
+            'external_id'     => s[:external_id].presence,
+            'application_key' => s[:application_key].presence,
+            'metadata'        => s[:metadata].present? ? s[:metadata].to_h : {},
+            'send_email'      => params[:send_email] != false,
+            'send_sms'        => params[:send_sms] == true
+          }.compact
+        end
+
+        create_params = ActionController::Parameters.new(
+          template_id:      template.id,
+          submitters:       normalized_submitters,
+          submitters_order: params[:submitters_order] || 'preserved',
+          send_email:       params[:send_email] != false,
+          send_sms:         params[:send_sms] == true
         )
 
-        submission = submissions.first
-        submitter  = submission.submitters.first
+        # ----------------------------------------------------------------
+        # 6. Create submissions via the shared service (handles ordering)
+        # ----------------------------------------------------------------
+        submissions_attrs, attachments =
+          Submissions::NormalizeParamUtils.normalize_submissions_params!(
+            submissions_params(create_params),
+            template
+          )
 
-        # 6. Build submitter preferences
-        preferences = {
-          'role'       => params[:submitter_role],
-          'send_email' => params[:send_email] != false,
-          'send_sms'   => params[:send_sms] == true
-        }
-
-        application_key = params[:application_key].presence
-        preferences['application_key'] = application_key if application_key.present?
-
-        metadata    = params[:metadata].present? ? params[:metadata].to_unsafe_h : {}
-        external_id = params[:external_id].presence
-        name        = params[:name].presence || params[:submitter_name].presence
-        phone       = params[:phone].presence
-
-        submitter.update!(
-          name:        name,
-          phone:       phone,
-          preferences: preferences,
-          metadata:    metadata,
-          external_id: external_id,
-          sent_at:     Time.current
+        submissions = Submissions.create_from_submitters(
+          template:,
+          user:             current_user,
+          source:           :api,
+          submitters_order: create_params[:submitters_order],
+          submissions_attrs:,
+          params:           create_params
         )
 
-        # 7. Send signature email unless suppressed
-        send_signature_email(submitter) if params[:send_email] != false
+        submitters_records = submissions.flat_map(&:submitters)
+        Submissions::NormalizeParamUtils.save_default_value_attachments!(attachments, submitters_records)
 
-        # 8. Respond in standard API format
-        render json: [{
-          id:            submitter.id,
-          slug:          submitter.slug,
-          uuid:          submitter.uuid,
-          name:          submitter.name,
-          email:         submitter.email,
-          phone:         submitter.phone,
-          completed_at:  submitter.completed_at,
-          declined_at:   submitter.declined_at,
-          external_id:   submitter.external_id,
-          submission_id: submission.id,
-          metadata:      submitter.metadata,
-          opened_at:     submitter.opened_at,
-          sent_at:       submitter.sent_at,
-          created_at:    submitter.created_at,
-          updated_at:    submitter.updated_at,
-          status:        submitter.completed_at? ? 'completed' : 'sent',
-          application_key: application_key,
-          values:        submitter.values || [],
-          preferences:   submitter.preferences,
-          role:          params[:submitter_role],
-          embed_src:     build_submitter_url(submitter)
-        }], status: :created
+        submitters_records.each do |submitter|
+          Submitters::MaybeUpdateDefaultValues.call(submitter, current_user, fill_now: true)
+        end
+
+        # ----------------------------------------------------------------
+        # 7. Fire webhooks, send ordered signature emails, reindex
+        #    (mirrors submissions#create exactly)
+        # ----------------------------------------------------------------
+        WebhookUrls.enqueue_events(submissions, 'submission.created')
+        Submissions.send_signature_requests(submissions)
+
+        submissions.each do |submission|
+          submission.submitters.each do |submitter|
+            next unless submitter.completed_at?
+
+            ProcessSubmitterCompletionJob.perform_async(
+              'submitter_id'         => submitter.id,
+              'send_invitation_email' => false
+            )
+          end
+        end
+
+        SearchEntries.enqueue_reindex(submissions)
+
+        # ----------------------------------------------------------------
+        # 8. Respond in the same shape as submissions#create
+        # ----------------------------------------------------------------
+        render json: build_create_json(submissions, create_params), status: :created
       end
 
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Validation Error: #{e.message}\nErrors: #{e.record.errors.full_messages}")
       render json: { error: "Validation failed: #{e.record.errors.full_messages.join(', ')}" },
              status: :unprocessable_entity
+    rescue Submitters::NormalizeValues::BaseError,
+           Submissions::CreateFromSubmitters::BaseError,
+           DownloadUtils::UnableToDownload => e
+      render json: { error: e.message }, status: :unprocessable_entity
     rescue => e
       Rails.logger.error(
         "Error in CustomSubmissionsController#create: #{e.message}\n" \
@@ -115,88 +170,200 @@ module Api
              status: :internal_server_error
     end
 
-    # -------------------------------------------------------------------------
+    # =========================================================================
     private
+    # =========================================================================
+
+    # -------------------------------------------------------------------------
+    # PDF PROCESSING
     # -------------------------------------------------------------------------
 
-    # Decodes the base64 PDF, draws a signature box on the last page,
-    # and returns [modified_pdf_binary, total_page_count].
-    def add_signature_labels(input_pdf_base64, submitter_email)
-      pdf_binary = Base64.decode64(input_pdf_base64)
-
-      result_binary = nil
-      total_pages   = nil
+    # Decodes the base64 PDF, draws one signature box per signer:
+    #   - ≤ 3 signers → side-by-side row at the bottom of the LAST page
+    #   - ≥ 4 signers → appended blank page (same dimensions as last page),
+    #                    boxes in rows of 3 from the TOP of that page
+    #
+    # Returns [modified_pdf_binary, total_pages, box_layout]
+    # box_layout: Array of { x:, y:, w:, h:, page: } in DocuSeal normalised coords
+    def add_signature_boxes(input_pdf_base64, submitters_array)
+      pdf_binary  = Base64.decode64(input_pdf_base64)
+      n           = submitters_array.size
+      result      = nil
+      total_pages = nil
+      box_layout  = []
 
       Tempfile.create(['labeled_input', '.pdf'], encoding: 'ascii-8bit') do |input_file|
         input_file.binmode
         input_file.write(pdf_binary)
         input_file.rewind
 
-        doc       = HexaPDF::Document.open(input_file.path)
-        total_pages = doc.pages.count          # ← count BEFORE we write
+        doc             = HexaPDF::Document.open(input_file.path)
+        original_pages  = doc.pages.count
+        last_page       = doc.pages[-1]
+        page_box        = last_page.box(:media)
+        page_w          = page_box.width.to_f
+        page_h          = page_box.height.to_f
 
-        last_page  = doc.pages[-1]
-        canvas     = last_page.canvas(type: :overlay)
-        page_box   = last_page.box(:media)
+        if n <= 3
+          # ------------------------------------------------------------------
+          # CASE A: ≤ 3 signers — single row at the bottom of the last page
+          # ------------------------------------------------------------------
+          box_layout = draw_signature_row(
+            doc,
+            last_page,
+            page_w,
+            page_h,
+            submitters_array,
+            row_index:    0,
+            page_index:   original_pages - 1,
+            anchor:       :bottom  # pin to bottom of page
+          )
+          total_pages = original_pages
+        else
+          # ------------------------------------------------------------------
+          # CASE B: ≥ 4 signers — append a blank page, rows of 3 from the top
+          # ------------------------------------------------------------------
+          new_page = doc.pages.add
+          new_page.box(:media, value: [0, 0, page_w, page_h])
 
-        # Box geometry
-        box_width  = page_box.width  * 0.35
-        box_height = page_box.height * 0.12
-        margin_x   = page_box.width  * 0.05
-        margin_y   = page_box.height * 0.03
-        box_x      = margin_x
-        box_y      = margin_y
+          total_pages    = original_pages + 1   # the appended page
+          new_page_index = total_pages - 1
 
-        padding     = 8
-        line_height = 10
-
-        # Filled background
-        canvas.save_graphics_state
-        canvas.fill_color(0.94, 0.96, 0.98)
-        canvas.rectangle(box_x, box_y, box_width, box_height).fill
-        canvas.restore_graphics_state
-
-        # Border
-        canvas.save_graphics_state
-        canvas.stroke_color(0.4, 0.5, 0.6)
-        canvas.line_width(0.6)
-        canvas.rectangle(box_x, box_y, box_width, box_height).stroke
-        canvas.restore_graphics_state
-
-        # Text labels
-        text_y_line1 = box_y + padding + line_height
-        text_y_line2 = box_y + padding
-
-        canvas.fill_color(0.35, 0.35, 0.35)
-        canvas.font('Helvetica', size: 7)
-        canvas.text("Digitally signed by #{submitter_email}", at: [box_x + padding, text_y_line1])
-        canvas.text("Date:",                                   at: [box_x + padding, text_y_line2])
+          rows = submitters_array.each_slice(3).to_a
+          rows.each_with_index do |row_signers, row_idx|
+            row_layout = draw_signature_row(
+              doc,
+              new_page,
+              page_w,
+              page_h,
+              row_signers,
+              row_index:  row_idx,
+              page_index: new_page_index,
+              anchor:     :top   # stack rows downward from the top
+            )
+            box_layout.concat(row_layout)
+          end
+        end
 
         Tempfile.create(['labeled_output', '.pdf'], encoding: 'ascii-8bit') do |output_file|
           output_file.binmode
           doc.write(output_file.path)
           output_file.rewind
-          result_binary = output_file.read
+          result = output_file.read
         end
       end
 
-      Rails.logger.info("[CustomSubmissions] PDF page count after HexaPDF write: #{total_pages}")
-      [result_binary, total_pages]
+      Rails.logger.info(
+        "[CustomSubmissions] PDF pages after processing: #{total_pages}, " \
+        "boxes drawn: #{box_layout.size}"
+      )
+
+      [result, total_pages, box_layout]
     end
 
-    # Creates a DocuSeal template with the modified PDF and places the
-    # signature + date fields precisely on the last page.
-    def create_template_with_document(pdf_binary, filename, submitter_email, total_pages)
-      submitter_uuid = SecureRandom.uuid
-      signature_uuid = SecureRandom.uuid
-      date_uuid      = SecureRandom.uuid
-      folder = TemplateFolder.find_or_create_by!(account_id: current_account.id, name: 'Custom Requests')
+    # Draws a horizontal row of signature boxes onto `page` for the given
+    # `signers` sub-array and returns their DocuSeal-normalised coordinates.
+    #
+    # anchor: :bottom → boxes pinned to the page bottom (last-page case)
+    #         :top    → boxes stacked from the top, offset by row_index (appended page)
+def draw_signature_row(doc, page, page_w, page_h, signers, row_index:, page_index:, anchor:)
+  n          = signers.size
+  margin_x   = page_w * 0.03
+  margin_y   = page_h * 0.03
+  box_h      = page_h * 0.12
+  row_gap    = page_h * 0.015
+  total_w    = page_w - (2 * margin_x)
+  gap        = page_w * 0.01
+
+  # Use max 3-column sizing so single signer doesn't stretch
+  reference_columns = [n, 3].max
+  standard_box_w    = (total_w - (gap * (reference_columns - 1))) / reference_columns
+
+  box_w = standard_box_w
+
+  # Vertical position
+  box_y = if anchor == :bottom
+    margin_y * 0.4
+  else
+    page_h - margin_y - box_h - (row_index * (box_h + row_gap))
+  end
+
+  canvas = page.canvas(type: :overlay)
+
+  box_layout = signers.each_with_index.map do |signer, i|
+    # Left aligned positioning
+    box_x = margin_x + i * (box_w + gap)
+
+    email      = signer[:email]
+    role_label = signer[:role].to_s
+
+    draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label)
+
+    ds_x = box_x / page_w
+    ds_y = 1.0 - (box_y + box_h) / page_h + 0.009
+    ds_w = box_w / page_w
+    ds_h = box_h / page_h
+
+    {
+      x:    ds_x,
+      y:    ds_y,
+      w:    ds_w,
+      h:    ds_h,
+      page: page_index
+    }
+  end
+
+  box_layout
+end
+    # Renders a single box with background, border, and two text lines.
+    def draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label)
+  padding = 6
+  line_height = 9
+
+  # Background + Border (same as before)
+  canvas.save_graphics_state
+  canvas.fill_color(0.94, 0.96, 0.98)
+  canvas.rectangle(box_x, box_y, box_w, box_h).fill
+  canvas.restore_graphics_state
+
+  canvas.save_graphics_state
+  canvas.stroke_color(0.4, 0.5, 0.6)
+  canvas.line_width(0.6)
+  canvas.rectangle(box_x, box_y, box_w, box_h).stroke
+  canvas.restore_graphics_state
+
+  # Role label (top)
+  canvas.fill_color(0.35, 0.35, 0.35)
+  canvas.font('Helvetica', size: 7)
+  canvas.text(role_label, at: [box_x + padding, box_y + box_h - padding - 2])
+
+  # "Digitally signed by" line (bottom)
+  canvas.font('Helvetica', size: 6)
+  canvas.text("Digitally signed by #{email}", at: [box_x + padding, box_y + padding + 1])
+end
+    # -------------------------------------------------------------------------
+    # TEMPLATE CREATION
+    # -------------------------------------------------------------------------
+
+    # Creates a DocuSeal template with one submitter entry per signer and
+    # places signature + date fields aligned to their respective boxes.
+    def create_template_with_document(pdf_binary, filename, submitters_array, total_pages, box_layout)
+      folder = TemplateFolder.find_or_create_by!(
+        account_id: current_account.id,
+        name:       'Custom Requests'
+      )
+
+      # One { uuid, name } entry per signer — role becomes the submitter name
+      template_submitters = submitters_array.map do |s|
+        { 'name' => s[:role], 'uuid' => SecureRandom.uuid }
+      end
+
       template = Template.create!(
-        account_id:  current_account.id,
-        author_id:   current_user.id,
-        name:        filename.presence || 'Signed Document',
-        submitters:  [{ 'name' => 'Signer', 'uuid' => submitter_uuid }],
-        folder_id:   folder.id
+        account_id: current_account.id,
+        author_id:  current_user.id,
+        name:       filename.presence || 'Signed Document',
+        submitters: template_submitters,
+        folder_id:  folder.id
       )
 
       tempfile = Tempfile.new(['upload', '.pdf'], encoding: 'ascii-8bit')
@@ -211,8 +378,8 @@ module Api
       )
 
       # extract_fields: false — prevents DocuSeal from auto-detecting
-      # {{Signature}} / {{DateSigned}} tags already present in the PDF text,
-      # which would create unwanted fields on earlier pages.
+      # {{Signature}} / {{DateSigned}} tags in the PDF text, which would
+      # create unwanted fields on earlier pages.
       documents       = Templates::CreateAttachments.call(
         template,
         { files: [uploaded_file] },
@@ -221,106 +388,102 @@ module Api
       attachment_uuid = documents.first.uuid
       schema          = documents.map { |doc| { attachment_uuid: doc.uuid, name: doc.filename.base } }
 
-      # Use the page count we measured directly from the HexaPDF-written binary.
-      # This is the ground truth — DocuSeal attachment metadata may lag or differ.
-      last_page_index = [total_pages - 1, 0].max
-
       Rails.logger.info(
-        "[CustomSubmissions] Placing fields on page index #{last_page_index} " \
-        "(1-based: page #{last_page_index + 1} of #{total_pages})"
+        "[CustomSubmissions] Creating template with #{submitters_array.size} submitters, " \
+        "#{total_pages} pages, #{box_layout.size} field boxes"
       )
 
-      # Coordinates mirror the blue box drawn by add_signature_labels.
-      #
-      # HexaPDF coordinate system: origin (0,0) is BOTTOM-LEFT of page.
-      #   box_x      = page_width  * 0.05   → left edge
-      #   box_y      = page_height * 0.03   → bottom edge
-      #   box_width  = page_width  * 0.35
-      #   box_height = page_height * 0.12
-      #
-      # DocuSeal coordinate system: origin (0,0) is TOP-LEFT, values 0..1 (normalised).
-      #   docuseal_x = hexapdf_x / page_width
-      #   docuseal_y = 1 - (hexapdf_y + element_height) / page_height
-      #
-      # Blue box in normalised HexaPDF coords:
-      #   left   = 0.05,  right  = 0.05 + 0.35 = 0.40
-      #   bottom = 0.03,  top    = 0.03 + 0.12  = 0.15
-      #
-      # Converted to DocuSeal (y flipped):
-      #   box top    in DocuSeal = 1 - 0.15 = 0.85
-      #   box bottom in DocuSeal = 1 - 0.03 = 0.97
+      # Build one signature field + one date field per signer, each anchored
+      # to that signer's box in box_layout.
+      fields = submitters_array.each_with_index.flat_map do |signer, i|
+        submitter_uuid = template_submitters[i]['uuid']
+        box            = box_layout[i]
 
-      sig_box_left_ds  = 0.05          # same in both systems (x not flipped)
-      sig_box_top_ds   = 1.0 - 0.15   # = 0.85  ← top of blue box in DocuSeal
-      sig_box_bot_ds   = 1.0 - 0.03   # = 0.97  ← bottom of blue box in DocuSeal
+        next [] unless box   # safety guard
 
-      # Signature field — upper portion of the box, leaving room for the text labels
-      # Occupies roughly the top 55% of the box interior
-      sig_area_h  = 0.055
-      sig_area_y  = sig_box_top_ds + 0.005   # just inside the top edge of the blue box
+        signature_uuid = SecureRandom.uuid
+        date_uuid      = SecureRandom.uuid
 
-      # Date field — bottom strip, inline with the "Date:" label
-      # The two text lines each occupy ~line_height/page_height ≈ 0.013 each.
-      # "Date:" is the lower line, so it sits at box_bottom - padding - line_height in HexaPDF.
-      # In DocuSeal that maps to near sig_box_bot_ds minus a small offset.
-      date_area_h = 0.013
-      date_area_y = sig_box_bot_ds - 0.018   # aligns with the "Date:" text line
+        # Signature field — upper ~60% of the box interior
+        sig_h    = box[:h] * 0.55
+        sig_y    = box[:y] + box[:h] * 0.06   # just inside the top edge
 
-      template.update!(
-        schema: schema,
-        fields: [
+        # Date field — bottom strip, aligned with the lower text label
+        date_h   = box[:h] * 0.16
+        date_y   = box[:y] + box[:h] * 0.60
+
+        [
           {
             'uuid'           => signature_uuid,
             'submitter_uuid' => submitter_uuid,
-            'name'           => 'signature',
+            'name'           => "signature_#{i + 1}",
             'type'           => 'signature',
             'required'       => true,
             'areas'          => [{
-              'x'               => sig_box_left_ds + 0.015,
-              'y'               => sig_area_y,
-              'w'               => 0.28,
-              'h'               => sig_area_h,
-              'page'            => last_page_index,
+              'x'               => box[:x] + box[:w] * 0.05,
+              'y'               => sig_y,
+              'w'               => box[:w] * 0.90,
+              'h'               => sig_h,
+              'page'            => box[:page],
               'attachment_uuid' => attachment_uuid
             }]
           },
           {
             'uuid'           => date_uuid,
             'submitter_uuid' => submitter_uuid,
-            'name'           => 'signed_date',
+            'name'           => "signed_date_#{i + 1}",
             'type'           => 'date',
             'required'       => false,
             'readonly'       => true,
             'default_value'  => '{{date}}',
             'areas'          => [{
-              'x'               => sig_box_left_ds + 0.045,
-              'y'               => date_area_y,
-              'w'               => 0.12,
-              'h'               => date_area_h,
-              'page'            => last_page_index,
+              'x'               => box[:x] + box[:w] * 0.05,
+              'y'               => date_y,
+              'w'               => box[:w] * 0.55,
+              'h'               => date_h,
+              'page'            => box[:page],
               'attachment_uuid' => attachment_uuid
             }]
           }
         ]
-      )
+      end.compact
+
+      template.update!(schema: schema, fields: fields)
 
       tempfile.close
       tempfile.unlink
       template
     end
 
-    def send_signature_email(submitter)
-      SubmitterMailer.invitation_email(submitter).deliver_later!
-    rescue => e
-      Rails.logger.error(
-        "Failed to send email for submitter #{submitter.id}: #{e.message}\n" \
-        "#{e.backtrace.first(5).join("\n")}"
-      )
-      raise
+    # -------------------------------------------------------------------------
+    # RESPONSE HELPERS (mirror submissions_controller exactly)
+    # -------------------------------------------------------------------------
+
+    def build_create_json(submissions, create_params)
+      submissions.flat_map do |submission|
+        submission.submitters.map do |s|
+          Submitters::SerializeForApi.call(s, with_documents: false, with_urls: true, params: create_params)
+        end
+      end
     end
 
-    def build_submitter_url(submitter)
-      "#{request.base_url}/s/#{submitter.slug}"
+    # -------------------------------------------------------------------------
+    # PARAMS HELPER (mirrors submissions_controller#submissions_params)
+    # -------------------------------------------------------------------------
+
+    def submissions_params(p)
+      permitted_attrs = [
+        :send_email, :send_sms, :submitters_order,
+        {
+          submitters: [
+            :send_email, :send_sms, :uuid, :name, :email, :role,
+            :completed, :phone, :application_key, :external_id, :order,
+            { metadata: {}, values: {}, roles: [], readonly_fields: [] }
+          ]
+        }
+      ]
+
+      p.permit(*permitted_attrs)
     end
   end
 end
