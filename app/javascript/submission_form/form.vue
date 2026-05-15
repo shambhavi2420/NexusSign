@@ -134,7 +134,7 @@
           type="hidden"
         >
         <div class="md:mt-4">
-          <div v-if="['cells', 'text'].includes(currentField.type)">
+          <div v-if="['cells', 'text', 'candidatefirstname', 'candidatelastname', 'candidatefullname', 'companyname', 'jobid', 'month', 'candidateprimaryphone', 'candidatepermanentaddress1', 'candidatepermanentcity', 'candidatepermanentstate', 'candidatepermanentzip', 'recruiter', 'recruiterphone', 'recruiteremail', 'candidatessn', 'clientname', 'recruitertitle', 'candidateemail', 'candidateprimaryprofession', 'candidateprimaryspecialty', 'additionalinformationforexhibitandrider', 'salesrepresentative', 'workauthorization'].includes(currentField.type)">
             <TextStep
               :key="currentField.uuid"
               v-model="values[currentField.uuid]"
@@ -144,7 +144,7 @@
             />
           </div>
           <NumberStep
-            v-else-if="currentField.type === 'number'"
+            v-else-if="['number', 'dateofmonth', 'year'].includes(currentField.type)"
             :key="currentField.uuid"
             v-model="values[currentField.uuid]"
             :show-field-names="showFieldNames"
@@ -152,7 +152,7 @@
             @focus="scrollIntoField(currentField)"
           />
           <DateStep
-            v-else-if="currentField.type === 'date'"
+            v-else-if="['date', 'signaturedate', 'currentdate', 'datewithmonthname', 'candidateavailablefrom', 'startdate', 'enddate'].includes(currentField.type)"
             :key="currentField.uuid"
             v-model="values[currentField.uuid]"
             :show-field-names="showFieldNames"
