@@ -128,7 +128,6 @@ export default {
         candidateemail: 'Candidate Email',
         candidateprimaryprofession: 'Candidate Primary Profession',
         candidateprimaryspecialty: 'Candidate Primary Specialty',
-        candidateaddress: 'Candidate Address',
         candidateavailablefrom: 'Candidate Available From'
 
       }
@@ -165,7 +164,6 @@ export default {
         candidateemail: 'Candidate Email',
         candidateprimaryprofession: 'Candidate Primary Profession',
         candidateprimaryspecialty: 'Candidate Primary Specialty',
-        candidateaddress: 'Candidate Address',
         candidateavailablefrom: 'Candidate Available From'
 
       }
@@ -204,7 +202,6 @@ export default {
         candidateemail: IconTextSize,
         candidateprimaryprofession: IconTextSize,
         candidateprimaryspecialty: IconTextSize,
-        candidateaddress: IconTextSize,
         candidateavailablefrom: IconTextSize
       }
     },
