@@ -119,7 +119,7 @@ module Api
           submissions_attrs:,
           params:           create_params
         )
-
+        maybe_enforce_order(submissions)
         submitters_records = submissions.flat_map(&:submitters)
         Submissions::NormalizeParamUtils.save_default_value_attachments!(attachments, submitters_records)
 
@@ -363,7 +363,8 @@ end
         author_id:  current_user.id,
         name:       filename.presence || 'Signed Document',
         submitters: template_submitters,
-        folder_id:  folder.id
+        folder_id:  folder.id,
+        preferences: { 'submitters_order' => 'preserved' }
       )
 
       tempfile = Tempfile.new(['upload', '.pdf'], encoding: 'ascii-8bit')

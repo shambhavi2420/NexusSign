@@ -68,7 +68,7 @@ module Api
       params[:send_sms] = false unless params.key?(:send_sms)
 
       submissions = create_submissions(@template, params)
-
+      maybe_enforce_order(submissions) 
       submissions.each do |submission|
         submission.submitters.each do |submitter|
           assign_submitter_preferences(submitter, params)
@@ -124,7 +124,7 @@ module Api
       params[:send_sms] = false
 
       submissions = create_submissions(@template, params)
-
+      maybe_enforce_order(submissions) 
       submissions.each do |submission|
         submission.submitters.each do |submitter|
           assign_submitter_preferences(submitter, params)
@@ -173,7 +173,7 @@ module Api
 
       ActiveRecord::Base.transaction do
         submissions = create_submissions(@template, modified_params)
-
+        maybe_enforce_order(submissions) 
         if submissions.empty?
           raise Submissions::CreateFromSubmitters::BaseError, 'Submission creation failed. Check template required fields/values.'
         end
@@ -249,7 +249,7 @@ module Api
         pdf_blob:    pdf_content,
         parsed_data: parsed_data
       )
-
+      template.update!(preferences: (template.preferences || {}).merge('submitters_order' => 'preserved'))
       temp_file.close
       temp_file.unlink
 
@@ -262,7 +262,7 @@ module Api
         params[:send_sms]    = false unless params.key?(:send_sms)
 
         submissions = create_submissions(template, params)
-
+        maybe_enforce_order(submissions) 
         submissions.each do |submission|
           submission.submitters.each do |submitter|
             assign_submitter_preferences(submitter, params)

@@ -109,5 +109,19 @@ module Api
       headers['Access-Control-Max-Age'] = '1728000'
       headers['Access-Control-Allow-Credentials'] = true
     end
+    def maybe_enforce_order(submissions)
+  return unless params[:enforce_order].in?([true, 'true'])
+
+  Array.wrap(submissions).each do |submission|
+    submission.update!(
+      preferences: (submission.preferences || {}).merge('enforce_order' => true)
+    )
+
+    submission.template.update!(
+      preferences: (submission.template.preferences || {}).merge('submitters_order' => 'preserved')
+    )
+  end
+end
+
   end
 end
