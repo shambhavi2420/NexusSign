@@ -654,6 +654,37 @@ en: &en
   phone_field: Phone Field
   verification_field: Identity Verification
   identity_verification: Identity verification
+  candidatefirstname_field: Candidate First Name
+  candidatelastname_field: Candidate Last Name
+  signaturedate_field: Signature Date
+  candidatefullname_field: Candidate Full Name
+  companyname_field: Company Name
+  currentdate_field: Current Date
+  jobid_field: Job ID
+  datewithmonthname_field: Date With Month Name
+  dateofmonth_field: Date Of Month
+  month_field: Month
+  year_field: Year
+  candidateprimaryphone_field: Candidate Primary Phone
+  candidatepermanentaddress1_field: Candidate Permanent Address 1
+  candidatepermanentcity_field: Candidate Permanent City
+  candidatepermanentstate_field: Candidate Permanent State
+  candidatepermanentzip_field: Candidate Permanent Zip
+  recruiter_field: Recruiter
+  recruiterphone_field: Recruiter Phone
+  recruiteremail_field: Recruiter Email
+  candidatessn_field: Candidate SSN
+  candidateavailablefrom_field: Candidate Available From
+  startdate_field: Start Date
+  enddate_field: End Date
+  clientname_field: Client Name
+  recruitertitle_field: Recruiter Title
+  candidateemail_field: Candidate Email
+  candidateprimaryprofession_field: Candidate Primary Profession
+  candidateprimaryspecialty_field: Candidate Primary Specialty
+  additionalinformationforexhibitandrider_field: Additional Information For Exhibit And Rider
+  salesrepresentative_field: Sales Representative
+  workauthorization_field: Work Authorization
   paid_price: 'Paid %{price}'
   verified: Verified
   unverified: Unverified
