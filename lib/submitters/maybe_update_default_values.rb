@@ -35,16 +35,23 @@ module Submitters
       'candidatespecialty' => 'Candidate Specialty',
       'candidateprimaryspecialty' => 'Candidate Primary Specialty',
       'candidatefullname' => 'Candidate Full Name',
-      'candidatelastname' => 'Candidate Last Name',
-      'candidatefirstname' => 'Candidate First Name',
-      'candidateemail' => 'Candidate Email',
       'candidateaddress' => 'Candidate Address',
       'candidatecity' => 'Candidate City',
       'candidatestate' => 'Candidate State',
       'candidatezip' => 'Candidate Zipcode',
       'candidatessn' => 'Candidate SSN',
+      'candidateavailablefrom' => 'Candidate Available From',
       'candidateavailablefromdate' => 'Candidate Available From Date',
       'candidateprimaryphone' => 'Candidate Primary Phone'
+    }.freeze
+
+    # API key aliases - maps API PascalCase keys to field types
+    API_KEY_ALIASES = {
+      'CandidateAddress' => 'candidatepermanentaddress1',
+      'CandidateCity' => 'candidatepermanentcity',
+      'CandidateState' => 'candidatepermanentstate',
+      'CandidateZip' => 'candidatepermanentzip',
+      'CandidateAvailableFrom' => 'candidateavailablefrom'
     }.freeze
 
     def call(submitter, current_user, fill_now: false)
@@ -165,20 +172,54 @@ module Submitters
       puts "       - Display name: #{display_name}"
 
       # Priority order for candidate field values:
-      # 1. Check preferences default_values by field type (e.g., 'profession')
-      # 2. Check preferences default_values by display name (e.g., 'Candidate Profession')
-      # 3. Check preferences default_values by exact field name from template
-      # 4. Check field default_value from template
+      # 1. Check preferences default_values by field type (e.g., 'candidatefirstname')
+      # 2. Check preferences default_values by display name (e.g., 'Candidate First Name')
+      # 3. Check preferences default_values by PascalCase (e.g., 'CandidateFirstName')
+      # 4. Check preferences default_values by exact field name from template
+      # 5. Check preferences default_values with case-insensitive search
+      # 6. Check field default_value from template
 
-      value = submitter.preferences.dig('default_values', field_type) ||
-              submitter.preferences.dig('default_values', display_name) ||
-              submitter.preferences.dig('default_values', field['name']) ||
-              field['default_value']
+      default_values = submitter.preferences['default_values'] || {}
+
+      # Try exact matches first
+      value = default_values[field_type] ||
+              default_values[display_name] ||
+              default_values[field['name']]
+
+      # If no exact match, try PascalCase version (e.g., CandidateFirstName)
+      if value.nil? && display_name
+        pascal_case_key = display_name.gsub(/\s+/, '')
+        value = default_values[pascal_case_key]
+        puts "       - default_values['#{pascal_case_key}'] (PascalCase): #{value.inspect}"
+      end
+
+      # Try API key aliases (e.g., CandidateAddress → candidatepermanentaddress1)
+      if value.nil?
+        API_KEY_ALIASES.each do |api_key, field_type_alias|
+          if field_type == field_type_alias && default_values.key?(api_key)
+            value = default_values[api_key]
+            puts "       - default_values['#{api_key}'] (API alias): #{value.inspect}"
+            break
+          end
+        end
+      end
+
+      # If still no match, try case-insensitive search
+      if value.nil? && display_name
+        match_key = default_values.keys.find do |k|
+          k.to_s.downcase.gsub(/[\s_-]/, '') == display_name.downcase.gsub(/[\s_-]/, '')
+        end
+        value = default_values[match_key] if match_key
+        puts "       - default_values['#{match_key}'] (case-insensitive): #{value.inspect}" if match_key
+      end
+
+      # Fallback to field's default_value
+      value ||= field['default_value']
 
       puts "    → Candidate field sources checked:"
-      puts "       - default_values['#{field_type}']: #{submitter.preferences.dig('default_values', field_type).inspect}"
-      puts "       - default_values['#{display_name}']: #{submitter.preferences.dig('default_values', display_name).inspect}"
-      puts "       - default_values['#{field['name']}']: #{submitter.preferences.dig('default_values', field['name']).inspect}"
+      puts "       - default_values['#{field_type}']: #{default_values[field_type].inspect}"
+      puts "       - default_values['#{display_name}']: #{default_values[display_name].inspect}"
+      puts "       - default_values['#{field['name']}']: #{default_values[field['name']].inspect}"
       puts "       - field['default_value']: #{field['default_value'].inspect}"
       puts "    → Final value: #{value.inspect}"
 
