@@ -134,7 +134,7 @@
           type="hidden"
         >
         <div class="md:mt-4">
-          <div v-if="['cells', 'text', 'candidatefirstname', 'candidatelastname', 'candidatefullname', 'companyname', 'jobid', 'month', 'candidateprimaryphone', 'candidatepermanentaddress1', 'candidatepermanentcity', 'candidatepermanentstate', 'candidatepermanentzip', 'recruiter', 'recruiterphone', 'recruiteremail', 'candidatessn', 'clientname', 'recruitertitle', 'candidateemail', 'candidateprimaryprofession', 'candidateprimaryspecialty', 'additionalinformationforexhibitandrider', 'salesrepresentative', 'workauthorization'].includes(currentField.type)">
+          <div v-if="['cells', 'text', 'signerfirstname', 'signerlastname', 'signerfullname', 'companyname', 'jobid', 'month', 'signerprimaryphone', 'candidatepermanentaddress1', 'candidatepermanentcity', 'candidatepermanentstate', 'candidatepermanentzip', 'recruiter', 'recruiterphone', 'recruiteremail', 'candidatessn', 'clientname', 'recruitertitle', 'signeremail', 'candidateprimaryprofession', 'candidateprimaryspecialty', 'additionalinformationforexhibitandrider', 'salesrepresentative', 'workauthorization'].includes(currentField.type)">
             <TextStep
               :key="currentField.uuid"
               v-model="values[currentField.uuid]"

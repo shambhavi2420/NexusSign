@@ -27,14 +27,14 @@ module Submitters
       'additionalinformationforexhibitandrider' => 'Additional Information For Exhibit And Rider',
       'salesrepresentative' => 'Sales Representative',
       'workauthorization' => 'Work Authorization',
-      'candidateemail' => 'Candidate Email',
-      'candidatefirstname' => 'Candidate First Name',
-      'candidatelastname' => 'Candidate Last Name',
+      'signeremail' => 'Signer Email',
+      'signerfirstname' => 'Signer First Name',
+      'signerlastname' => 'Signer Last Name',
       'candidateprofession' => 'Candidate Profession',
       'candidateprimaryprofession' => 'Candidate Primary Profession',
       'candidatespecialty' => 'Candidate Specialty',
       'candidateprimaryspecialty' => 'Candidate Primary Specialty',
-      'candidatefullname' => 'Candidate Full Name',
+      'signerfullname' => 'Signer Full Name',
       'candidateaddress' => 'Candidate Address',
       'candidatecity' => 'Candidate City',
       'candidatestate' => 'Candidate State',
@@ -42,7 +42,7 @@ module Submitters
       'candidatessn' => 'Candidate SSN',
       'candidateavailablefrom' => 'Candidate Available From',
       'candidateavailablefromdate' => 'Candidate Available From Date',
-      'candidateprimaryphone' => 'Candidate Primary Phone'
+      'signerprimaryphone' => 'Signer Primary Phone'
     }.freeze
 
     # API key aliases - maps API PascalCase keys to field types
@@ -163,67 +163,51 @@ module Submitters
       end
     end
 
-    def get_candidate_field_value(field, field_type, submitter)
-      # Get the display name for this field type
-      display_name = CANDIDATE_FIELD_MAPPINGS[field_type] || field['name']
+   def get_candidate_field_value(field, field_type, submitter)
+  default_values = submitter.preferences['default_values'] || {}
+  
+  # Clean the inputs aggressively
+  raw_field_type = field_type.to_s.strip
+  field_type_clean = raw_field_type.downcase
+  field_name = field['name'].to_s.strip
 
-      puts "    → Looking for candidate field value"
-      puts "       - Field type: #{field_type}"
-      puts "       - Display name: #{display_name}"
+  puts "    → DEBUG Field - name: '#{field_name}', raw_type: '#{raw_field_type}', clean_type: '#{field_type_clean}'"
 
-      # Priority order for candidate field values:
-      # 1. Check preferences default_values by field type (e.g., 'candidatefirstname')
-      # 2. Check preferences default_values by display name (e.g., 'Candidate First Name')
-      # 3. Check preferences default_values by PascalCase (e.g., 'CandidateFirstName')
-      # 4. Check preferences default_values by exact field name from template
-      # 5. Check preferences default_values with case-insensitive search
-      # 6. Check field default_value from template
+  # 1. Try common direct matches (including what you send from API)
+  value = default_values[raw_field_type] ||
+          default_values[field_name] ||
+          default_values[field_type_clean] ||
+          default_values[field_name.gsub(/[\s_-]/, '')]
 
-      default_values = submitter.preferences['default_values'] || {}
+  # 2. Use CANDIDATE_FIELD_MAPPINGS (with cleaned key)
+  if value.nil? && CANDIDATE_FIELD_MAPPINGS.key?(field_type_clean)
+    display_name = CANDIDATE_FIELD_MAPPINGS[field_type_clean]
+    value = default_values[display_name] || default_values[display_name&.gsub(/\s+/, '')]
+  end
 
-      # Try exact matches first
-      value = default_values[field_type] ||
-              default_values[display_name] ||
-              default_values[field['name']]
+  # 3. PascalCase keys from API (most important for your case)
+  if value.nil?
+    pascal_key = field_name.gsub(/[\s_-]/, '')
+    value = default_values[pascal_key]
+    puts "       - Tried PascalCase '#{pascal_key}': #{value.inspect}" if value
+  end
 
-      # If no exact match, try PascalCase version (e.g., CandidateFirstName)
-      if value.nil? && display_name
-        pascal_case_key = display_name.gsub(/\s+/, '')
-        value = default_values[pascal_case_key]
-        puts "       - default_values['#{pascal_case_key}'] (PascalCase): #{value.inspect}"
-      end
-
-      # Try API key aliases (e.g., CandidateAddress → candidatepermanentaddress1)
-      if value.nil?
-        API_KEY_ALIASES.each do |api_key, field_type_alias|
-          if field_type == field_type_alias && default_values.key?(api_key)
-            value = default_values[api_key]
-            puts "       - default_values['#{api_key}'] (API alias): #{value.inspect}"
-            break
-          end
-        end
-      end
-
-      # If still no match, try case-insensitive search
-      if value.nil? && display_name
-        match_key = default_values.keys.find do |k|
-          k.to_s.downcase.gsub(/[\s_-]/, '') == display_name.downcase.gsub(/[\s_-]/, '')
-        end
-        value = default_values[match_key] if match_key
-        puts "       - default_values['#{match_key}'] (case-insensitive): #{value.inspect}" if match_key
-      end
-
-      # Fallback to field's default_value
-      value ||= field['default_value']
-
-      puts "    → Candidate field sources checked:"
-      puts "       - default_values['#{field_type}']: #{default_values[field_type].inspect}"
-      puts "       - default_values['#{display_name}']: #{default_values[display_name].inspect}"
-      puts "       - default_values['#{field['name']}']: #{default_values[field['name']].inspect}"
-      puts "       - field['default_value']: #{field['default_value'].inspect}"
-      puts "    → Final value: #{value.inspect}"
-
-      value
+  # 4. Very aggressive normalized match (handles spaces, casing, etc.)
+  if value.nil?
+    normalized_target = field_name.downcase.gsub(/[\s_-]/, '')
+    match_key = default_values.keys.find do |k|
+      k.to_s.downcase.gsub(/[\s_-]/, '') == normalized_target
     end
+    value = default_values[match_key] if match_key
+    puts "       - Aggressive match on '#{match_key}': #{value.inspect}" if value
+  end
+
+  # 5. Final fallback
+  value ||= field['default_value']
+
+  puts "    → FINAL value for '#{field_name}': #{value.inspect}"
+  value
+end
+
   end
 end
