@@ -3,13 +3,13 @@ FROM ruby:3.4.2-alpine AS download
 WORKDIR /fonts
 
 RUN apk --no-cache add fontforge wget && \
-    wget https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf && \
-    wget https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Bold.ttf && \
-    wget https://github.com/impallari/DancingScript/raw/master/fonts/DancingScript-Regular.otf && \
-    wget https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io/fonts/NotoSansSymbols2/hinted/ttf/NotoSansSymbols2-Regular.ttf && \
-    wget https://github.com/Maxattax97/gnu-freefont/raw/master/ttf/FreeSans.ttf && \
-    wget https://github.com/impallari/DancingScript/raw/master/OFL.txt && \
-    wget -O pdfium-linux.tgz "https://github.com/docusealco/pdfium-binaries/releases/latest/download/pdfium-linux-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tgz" && \
+    wget -L https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf && \
+    wget -L https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Bold.ttf && \
+    wget -L https://github.com/impallari/DancingScript/raw/master/fonts/DancingScript-Regular.otf && \
+    wget -L https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io/fonts/NotoSansSymbols2/hinted/ttf/NotoSansSymbols2-Regular.ttf && \
+    wget -L https://github.com/Maxattax97/gnu-freefont/raw/master/ttf/FreeSans.ttf && \
+    wget -L https://github.com/impallari/DancingScript/raw/master/OFL.txt && \
+    wget -L -O pdfium-linux.tgz "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-musl-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').tgz" && \
     mkdir -p /pdfium-linux && \
     tar -xzf pdfium-linux.tgz -C /pdfium-linux
 
@@ -50,7 +50,6 @@ ENV OPENSSL_CONF=/app/openssl_legacy.cnf
 
 WORKDIR /app
 
-# Install core dependencies from stable repositories first
 RUN apk add --no-cache \
     sqlite-dev \
     libpq-dev \
@@ -62,10 +61,8 @@ RUN apk add --no-cache \
     mkdir /fonts && \
     rm -f /usr/share/fonts/freefont/FreeSans.otf
 
-# Install vips and libheif from stable Alpine repositories
 RUN apk add --no-cache vips-dev libheif vips-heif
 
-# Remove the problematic rm command for FreeSans.otf if it doesn't exist
 RUN rm -f /usr/share/fonts/freefont/FreeSans.otf || true
 
 RUN echo $'.include = /etc/ssl/openssl.cnf\n\
@@ -113,3 +110,4 @@ ENV WORKDIR=/data/docuseal
 
 EXPOSE 3000
 CMD ["/app/bin/bundle", "exec", "puma", "-C", "/app/config/puma.rb", "--dir", "/app"]
+
