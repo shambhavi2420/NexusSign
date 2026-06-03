@@ -15,9 +15,28 @@ module Submitters
       'month' => '%-m',
       'year' => '%Y'
     }.freeze
+    CANDIDATE_DATE_FIELD_TYPES = %w[
+  candidateavailablefrom
+  candidateavailablefromdate
+  startdate
+  enddate
+].freeze
 
     module_function
+    def convert_candidate_date_values(values, submitter)
+  fields_index = (submitter.submission.template_fields || submitter.submission.template.fields)
+                   .index_by { |f| f['uuid'] }
 
+  values.transform_values do |v|
+    field = fields_index[values.key(v)]
+    next v unless field
+    next v unless CANDIDATE_DATE_FIELD_TYPES.include?(field['type'])
+    next v unless v.to_s.match?(/^\d{4}-\d{2}-\d{2}$/)
+
+    parts = v.split('-')
+    "#{parts[1]}/#{parts[2]}/#{parts[0]}"
+  end
+end
     def call(submitter, params, request, validate_required: true)
       Submissions.update_template_fields!(submitter.submission) if submitter.submission.template_fields.blank?
 
@@ -38,7 +57,7 @@ module Submitters
 
     def update_submitter!(submitter, params, request, validate_required: true)
       values = normalized_values(params)
-
+      values = convert_candidate_date_values(values, submitter)
       submitter.values.merge!(values)
       submitter.opened_at ||= Time.current
 
@@ -118,6 +137,7 @@ module Submitters
     end
 
     def normalized_values(params)
+      puts "DEBUG SUBMITTED VALUES: #{params.fetch(:values, {}).to_unsafe_h.inspect}"
       params.fetch(:values, {}).to_unsafe_h.transform_values do |v|
         if params[:cast_boolean] == 'true'
           v == 'true'

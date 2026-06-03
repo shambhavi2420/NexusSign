@@ -554,17 +554,18 @@ export default {
     locale () {
       return Intl.DateTimeFormat().resolvedOptions()?.locale
     },
-    formattedDate () {
-      if (this.field.type === 'date' && this.modelValue) {
-        try {
-          return this.formatDate(
-            this.modelValue === '{{date}}' ? new Date() : new Date(this.modelValue),
-            this.field.preferences?.format || (this.locale.endsWith('-US') ? 'MM/DD/YYYY' : 'DD/MM/YYYY')
-          )
-        } catch {
-          return this.modelValue
-        }
-      } else {
+formattedDate () {
+  const DATE_FIELD_TYPES = ['date', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate', 'signaturedate', 'currentdate']
+  if (DATE_FIELD_TYPES.includes(this.field.type) && this.modelValue) {
+    try {
+      return this.formatDate(
+        this.modelValue === '{{date}}' ? new Date() : new Date(this.modelValue),
+        this.field.preferences?.format || (this.locale.endsWith('-US') ? 'MM/DD/YYYY' : 'DD/MM/YYYY')
+      )
+    } catch {
+      return this.modelValue
+    }
+  } else {
         return ''
       }
     },

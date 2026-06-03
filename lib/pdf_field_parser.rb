@@ -83,21 +83,23 @@ class PdfFieldParser
   private
 
   def extract_tags_from_page(page, page_index)
-    receiver = PreciseTextReceiver.new(page)
-    page.walk(receiver)
+  receiver = PreciseTextReceiver.new(page)
+  page.walk(receiver)
 
-    page_width = page.width
-    page_height = page.height
-
-    receiver.text_runs.each do |text_run|
-      text = text_run[:text]
-      next unless text.match?(FIELD_TAG_REGEX)
-
-      # Process each tag found in this text run
-      process_tags_in_text_run(text_run, page_index, page_width, page_height)
-    end
+  puts "Page #{page_index}: #{receiver.text_runs.size} text runs"
+  receiver.text_runs.each do |run|
+  puts "  RUN[#{page_index}]: #{run[:text].inspect}"
   end
 
+  page_width = page.width
+  page_height = page.height
+
+  receiver.text_runs.each do |text_run|
+    text = text_run[:text]
+    next unless text.match?(FIELD_TAG_REGEX)
+    process_tags_in_text_run(text_run, page_index, page_width, page_height)
+  end
+end
   def process_tags_in_text_run(text_run, page_index, page_width, page_height)
     text = text_run[:text]
     

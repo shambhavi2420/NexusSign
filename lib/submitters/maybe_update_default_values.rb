@@ -47,12 +47,30 @@ module Submitters
 
     # API key aliases - maps API PascalCase keys to field types
     API_KEY_ALIASES = {
-      'CandidateAddress' => 'candidatepermanentaddress1',
-      'CandidateCity' => 'candidatepermanentcity',
-      'CandidateState' => 'candidatepermanentstate',
-      'CandidateZip' => 'candidatepermanentzip',
-      'CandidateAvailableFrom' => 'candidateavailablefrom'
+      'CandidateAddress'           => 'candidatepermanentaddress1',
+      'CandidateCity'              => 'candidatepermanentcity',
+      'CandidateState'             => 'candidatepermanentstate',
+      'CandidateZip'               => 'candidatepermanentzip',
+      'CandidateAvailableFrom'     => 'candidateavailablefrom',
+      'CandidateSSN'               => 'candidatessn',
+      'CandidatePrimaryProfession' => 'candidateprimaryprofession',
+      'CandidatePrimarySpecialty'  => 'candidateprimaryspecialty',
+      'SignerFullName'             => 'signerfullname',
+      'SignerFirstName'            => 'signerfirstname',
+      'SignerLastName'             => 'signerlastname',
+      'SignerEmail'                => 'signeremail',
+      'SignerPrimaryPhone'         => 'signerprimaryphone'
     }.freeze
+
+    # Date field types that need format normalization
+    DATE_FIELD_TYPES = %w[
+      candidateavailablefrom
+      candidateavailablefromdate
+      startdate
+      enddate
+      signaturedate
+      currentdate
+    ].freeze
 
     def call(submitter, current_user, fill_now: false)
       puts "\n" + "="*50
@@ -78,7 +96,6 @@ module Submitters
       fields = submitter.submission.template_fields || submitter.submission.template.fields
       puts "\nTemplate has #{fields.length} fields"
 
-      # Track if any values were updated
       values_updated = false
 
       fields.each do |field|
@@ -88,7 +105,6 @@ module Submitters
         puts "Field: #{field.slice('name', 'type', 'uuid').inspect}"
         puts "Current value for #{field['uuid']}: #{submitter.values[field['uuid']].inspect}"
 
-        # Skip if value already exists and we're not force-filling
         if submitter.values[field['uuid']].present? && !fill_now
           puts "✗ Skipping - value already present and fill_now=false"
           next
@@ -111,10 +127,8 @@ module Submitters
       puts "Values updated: #{values_updated}"
       puts "="*50 + "\n"
 
-      # Only save if values were actually updated
       if values_updated
         submitter.save!
-        # Reload to ensure fresh data
         submitter.reload
       end
 
@@ -130,19 +144,16 @@ module Submitters
       puts "    → field_type: '#{field_type}'"
       puts "    → field_uuid: '#{field_uuid}'"
 
-      # Check if this is a candidate field type
       if CANDIDATE_FIELD_MAPPINGS.key?(field_type)
         puts "    → CANDIDATE FIELD DETECTED: #{field_type}"
         return get_candidate_field_value(field, field_type, submitter)
       end
 
-      # Legacy handling for profession field name/type
       if field_name.include?('profession') || field_type == 'profession'
         puts "    → PROFESSION FIELD DETECTED"
         return get_candidate_field_value(field, 'profession', submitter)
       end
 
-      # Handle other standard field types
       case
       when field_name.in?(['full name', 'legal name'])
         user&.full_name
@@ -158,56 +169,46 @@ module Submitters
         )
         attachment.uuid
       else
-        # Check if field has a default_value defined
         field['default_value']
       end
     end
 
-   def get_candidate_field_value(field, field_type, submitter)
-  default_values = submitter.preferences['default_values'] || {}
-  
-  # Clean the inputs aggressively
-  raw_field_type = field_type.to_s.strip
-  field_type_clean = raw_field_type.downcase
-  field_name = field['name'].to_s.strip
+    def get_candidate_field_value(field, field_type, submitter)
+      default_values = submitter.preferences['default_values'] || {}
 
-  puts "    → DEBUG Field - name: '#{field_name}', raw_type: '#{raw_field_type}', clean_type: '#{field_type_clean}'"
+      # Translate all PascalCase API keys → lowercase field type keys
+      resolved_default_values = default_values.transform_keys do |k|
+        API_KEY_ALIASES[k] || k.downcase.gsub(/[\s_-]/, '')
+      end
 
-  # 1. Try common direct matches (including what you send from API)
-  value = default_values[raw_field_type] ||
-          default_values[field_name] ||
-          default_values[field_type_clean] ||
-          default_values[field_name.gsub(/[\s_-]/, '')]
+      field_type_clean = field_type.to_s.strip.downcase
 
-  # 2. Use CANDIDATE_FIELD_MAPPINGS (with cleaned key)
-  if value.nil? && CANDIDATE_FIELD_MAPPINGS.key?(field_type_clean)
-    display_name = CANDIDATE_FIELD_MAPPINGS[field_type_clean]
-    value = default_values[display_name] || default_values[display_name&.gsub(/\s+/, '')]
-  end
+      puts "    → DEBUG field_type_clean: '#{field_type_clean}'"
+      puts "    → DEBUG resolved keys: #{resolved_default_values.keys.inspect}"
 
-  # 3. PascalCase keys from API (most important for your case)
-  if value.nil?
-    pascal_key = field_name.gsub(/[\s_-]/, '')
-    value = default_values[pascal_key]
-    puts "       - Tried PascalCase '#{pascal_key}': #{value.inspect}" if value
-  end
+      value = resolved_default_values[field_type_clean]
 
-  # 4. Very aggressive normalized match (handles spaces, casing, etc.)
-  if value.nil?
-    normalized_target = field_name.downcase.gsub(/[\s_-]/, '')
-    match_key = default_values.keys.find do |k|
-      k.to_s.downcase.gsub(/[\s_-]/, '') == normalized_target
+
+      value ||= field['default_value']
+
+      puts "    → FINAL value for '#{field_type_clean}': #{value.inspect}"
+      value
     end
-    value = default_values[match_key] if match_key
-    puts "       - Aggressive match on '#{match_key}': #{value.inspect}" if value
-  end
 
-  # 5. Final fallback
-  value ||= field['default_value']
+    def normalize_date(value)
+      return value if value.blank?
 
-  puts "    → FINAL value for '#{field_name}': #{value.inspect}"
-  value
-end
+      # Already YYYY-MM-DD, return as-is
+      return value if value.match?(/^\d{4}-\d{2}-\d{2}$/)
+
+      # MM/DD/YYYY or MM-DD-YYYY → YYYY-MM-DD
+      if value.match?(/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/)
+        parts = value.scan(/\d+/)
+        return "#{parts[2]}-#{parts[0]}-#{parts[1]}"
+      end
+
+      value
+    end
 
   end
 end

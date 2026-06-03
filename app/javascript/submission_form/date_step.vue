@@ -130,14 +130,19 @@ export default {
         return true
       }
     },
-    value: {
-      set (value) {
-        this.$emit('update:model-value', value)
-      },
-      get () {
-        return this.modelValue
-      }
+value: {
+  set (value) {
+    // Convert YYYY-MM-DD back to MM/DD/YYYY before storing
+    if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parts = value.split('-')
+      value = `${parts[1]}/${parts[2]}/${parts[0]}`
     }
+    this.$emit('update:model-value', value)
+  },
+  get () {
+    return this.toIsoDate(this.modelValue)
+  }
+},
   },
   methods: {
     onEnter (e) {
@@ -166,6 +171,13 @@ export default {
         inputEl.dispatchEvent(new Event('input', { bubbles: true }))
       }
     },
+toIsoDate (value) {
+  if (!value) return value
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const match = value.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/)
+  if (match) return `${match[3]}-${match[1]}-${match[2]}`
+  return value
+},
     setCurrentDate () {
       const inputEl = this.$refs.input
 
