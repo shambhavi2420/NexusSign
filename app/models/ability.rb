@@ -12,6 +12,7 @@ class Ability
     elsif user.role == 'editor'
       can :manage, Template, account_id: user.account_id
       can :manage, TemplateFolder, account_id: user.account_id
+      can :manage, TemplateFolderPermission, template_folder: { account_id: user.account_id, author_id: user.id }
       can :manage, Submission, account_id: user.account_id
       can :manage, Submitter
       can :read, WebhookUrl, account_id: user.account_id

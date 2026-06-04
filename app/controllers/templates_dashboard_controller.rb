@@ -11,8 +11,11 @@ class TemplatesDashboardController < ApplicationController
   helper_method :selected_order
 
   def index
-    @template_folders =
-      TemplateFolders.filter_active_folders(@template_folders.where(parent_folder_id: nil), @templates)
+    permitted_folders = TemplateFolderPermissions.visible_to(
+      @template_folders.where(parent_folder_id: nil),
+      current_user
+    )
+    @template_folders = TemplateFolders.filter_active_folders(permitted_folders, @templates)
 
     @template_folders = TemplateFolders.search(@template_folders, params[:q])
     @template_folders = TemplateFolders.sort(@template_folders, current_user, selected_order)

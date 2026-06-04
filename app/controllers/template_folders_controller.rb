@@ -13,8 +13,9 @@ class TemplateFoldersController < ApplicationController
                          .where(folder: [@template_folder, *(params[:q].present? ? @template_folder.subfolders : [])])
                          .preload(:author, :template_accesses)
 
-    @template_folders =
-      @template_folder.subfolders.where(id: Template.accessible_by(current_ability).active.select(:folder_id))
+    raw_subfolders = @template_folder.subfolders
+                                     .where(id: Template.accessible_by(current_ability).active.select(:folder_id))
+    @template_folders = TemplateFolderPermissions.visible_to(raw_subfolders, current_user)
 
     @template_folders = TemplateFolders.search(@template_folders, params[:q])
     @template_folders = TemplateFolders.sort(@template_folders, current_user, selected_order)
