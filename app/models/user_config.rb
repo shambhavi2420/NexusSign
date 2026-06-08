@@ -25,6 +25,9 @@ class UserConfig < ApplicationRecord
   INITIALS_KEY = 'initials'
   RECEIVE_COMPLETED_EMAIL = 'receive_completed_email'
   RECEIVE_DECLINED_EMAIL = 'receive_declined_email'
+  RECEIVE_VIEWED_EMAIL = 'receive_viewed_email'
+  RECEIVE_STARTED_EMAIL = 'receive_started_email'
+  RECEIVE_EXPIRED_EMAIL = 'receive_expired_email'
   SHOW_APP_TOUR = 'show_app_tour'
 
   belongs_to :user

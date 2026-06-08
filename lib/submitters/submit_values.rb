@@ -44,6 +44,8 @@ end
         SubmissionEvents.create_with_tracking_data(submitter, 'start_form', request)
 
         WebhookUrls.enqueue_events(submitter, 'form.started')
+
+        enqueue_started_notification_email(submitter)
       end
 
       update_submitter!(submitter, params, request, validate_required:)
@@ -389,6 +391,20 @@ end
 
     def validate_value!(_value, _field, _params, _submitter, _request)
       true
+    end
+
+    def enqueue_started_notification_email(submitter)
+      user = submitter.submission.created_by_user || submitter.template&.author
+
+      return unless user
+      return unless submitter.account.users.exists?(id: user.id)
+
+      template = submitter.template
+      return if template && template.preferences['started_notification_email_enabled'] == false
+      return unless user.user_configs.find_by(key: UserConfig::RECEIVE_STARTED_EMAIL)&.value == true ||
+                    template&.preferences&.dig('started_notification_email_enabled') == true
+
+      SubmitterMailer.started_email(submitter, user).deliver_later!
     end
   end
 end

@@ -4,19 +4,29 @@
     <h1 class="text-4xl font-bold mb-4">
       <%= t('email_notifications') %>
     </h1>
-    <div class="mt-2 mb-1">
-      <% user_config = UserConfig.find_or_initialize_by(user: current_user, key: UserConfig::RECEIVE_COMPLETED_EMAIL) %>
-      <% if can?(:manage, user_config) %>
-        <%= form_for user_config, url: user_configs_path, method: :post do |f| %>
-          <%= f.hidden_field :key %>
-          <div class="flex items-center justify-between">
-            <span>
-              <%= t('receive_notification_emails_on_completed_submission') %>
-            </span>
-            <submit-form data-on="change" class="flex">
-              <%= f.check_box :value, class: 'toggle', checked: user_config.value != false %>
-            </submit-form>
-          </div>
+    <div class="mt-2 space-y-3">
+      <% notification_events = [
+        { key: UserConfig::RECEIVE_COMPLETED_EMAIL, label: t('receive_notification_emails_on_completed_submission'), default_on: true },
+        { key: UserConfig::RECEIVE_DECLINED_EMAIL, label: t('receive_notification_emails_on_declined_submission'), default_on: true },
+        { key: UserConfig::RECEIVE_VIEWED_EMAIL, label: t('receive_notification_emails_on_form_viewed'), default_on: false },
+        { key: UserConfig::RECEIVE_STARTED_EMAIL, label: t('receive_notification_emails_on_form_started'), default_on: false },
+        { key: UserConfig::RECEIVE_EXPIRED_EMAIL, label: t('receive_notification_emails_on_submission_expired'), default_on: true }
+      ] %>
+      <% notification_events.each do |event| %>
+        <% user_config = UserConfig.find_or_initialize_by(user: current_user, key: event[:key]) %>
+        <% if can?(:manage, user_config) %>
+          <%= form_for user_config, url: user_configs_path, method: :post do |f| %>
+            <%= f.hidden_field :key %>
+            <div class="flex items-center justify-between">
+              <span>
+                <%= event[:label] %>
+              </span>
+              <submit-form data-on="change" class="flex">
+                <% is_checked = user_config.value.nil? ? event[:default_on] : user_config.value != false %>
+                <%= f.check_box :value, class: 'toggle', checked: is_checked %>
+              </submit-form>
+            </div>
+          <% end %>
         <% end %>
       <% end %>
     </div>

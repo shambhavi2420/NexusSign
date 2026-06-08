@@ -1,0 +1,17 @@
+<%= render 'shared/turbo_modal', title: t('rename_team') do %>
+  <%= form_for @team, url: settings_team_path(@team), data: { turbo_frame: :_top }, html: { autocomplete: :off } do |f| %>
+    <div class="form-control my-6">
+      <%= f.text_field :name, required: true, placeholder: "#{t('team_name')}...", class: 'base-input w-full', autofocus: true, dir: 'auto' %>
+    </div>
+    <% if @team.errors.any? %>
+      <div class="text-error text-sm mb-4">
+        <% @team.errors.full_messages.each do |msg| %>
+          <p><%= msg %></p>
+        <% end %>
+      </div>
+    <% end %>
+    <div class="form-control">
+      <%= f.button button_title(title: t('save'), disabled_with: t('saving')), class: 'base-button' %>
+    </div>
+  <% end %>
+<% end %>

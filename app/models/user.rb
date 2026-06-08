@@ -66,6 +66,8 @@ class User < ApplicationRecord
   has_many :encrypted_configs, dependent: :destroy, class_name: 'EncryptedUserConfig'
   has_many :email_messages, dependent: :destroy, foreign_key: :author_id, inverse_of: :author
   has_many :template_folder_permissions, dependent: :destroy
+  has_many :team_memberships, dependent: :destroy
+  has_many :teams, through: :team_memberships
 
   devise :two_factor_authenticatable, :recoverable, :rememberable, :validatable, :trackable, :lockable
 

@@ -20,17 +20,34 @@
 #
 class TemplateFolderPermission < ApplicationRecord
   belongs_to :template_folder
-  belongs_to :user
+  belongs_to :user, optional: true
+  belongs_to :team, optional: true
 
-  validates :user_id, uniqueness: { scope: :template_folder_id }
+  validates :user_id, uniqueness: { scope: :template_folder_id }, allow_nil: true
+  validates :team_id, uniqueness: { scope: :template_folder_id }, allow_nil: true
   validate :user_and_folder_same_account
+  validate :team_and_folder_same_account
+  validate :user_or_team_present
 
   private
+
+  def user_or_team_present
+    return if user_id.present? || team_id.present?
+
+    errors.add(:base, 'must have either a user or a team')
+  end
 
   def user_and_folder_same_account
     return if user.nil? || template_folder.nil?
     return if user.account_id == template_folder.account_id
 
     errors.add(:user, 'must belong to the same account as the folder')
+  end
+
+  def team_and_folder_same_account
+    return if team.nil? || template_folder.nil?
+    return if team.account_id == template_folder.account_id
+
+    errors.add(:team, 'must belong to the same account as the folder')
   end
 end

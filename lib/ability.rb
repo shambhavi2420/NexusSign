@@ -14,7 +14,7 @@ class Ability
         Abilities::TemplateConditions.entity(template, user:, ability: 'manage')
       end
       can :destroy, Template, account_id: user.account_id
-      can :manage, TemplateFolder, account_id: user.account_id
+      can %i[read create], TemplateFolder, account_id: user.account_id
       can :manage, TemplateSharing, template: { account_id: user.account_id }
       can :manage, Submission, account_id: user.account_id
       can :manage, Submitter, account_id: user.account_id

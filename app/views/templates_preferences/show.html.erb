@@ -309,6 +309,60 @@
           <% end %>
         </div>
       </div>
+      <div class="collapse collapse-arrow join-item border border-base-300">
+        <input type="checkbox" name="accordion">
+        <div class="collapse-title text-xl font-medium">
+          <%= t('notification_events') %>
+        </div>
+        <div class="collapse-content">
+          <%= form_for @template, url: template_preferences_path(@template), method: :post, html: { autocomplete: 'off', class: 'mt-1' }, data: { close_on_submit: false } do |f| %>
+            <toggle-on-submit data-element-id="events_saved_alert"></toggle-on-submit>
+            <%= f.fields_for :preferences, Struct.new(:viewed_notification_email_enabled, :started_notification_email_enabled, :declined_notification_email_enabled, :expired_notification_email_enabled).new(@template.preferences['viewed_notification_email_enabled'], @template.preferences['started_notification_email_enabled'], @template.preferences['declined_notification_email_enabled'], @template.preferences['expired_notification_email_enabled']) do |ff| %>
+              <p class="text-sm text-base-content/70 px-1 mb-3">
+                <%= t('choose_which_events_trigger_notification_emails') %>
+              </p>
+              <div class="flex items-center justify-between py-2 px-1">
+                <span>
+                  <%= t('notify_when_form_is_viewed') %>
+                </span>
+                <submit-form data-on="change" class="flex">
+                  <%= ff.check_box :viewed_notification_email_enabled, { checked: ff.object.viewed_notification_email_enabled == true, class: 'toggle' }, 'true', 'false' %>
+                </submit-form>
+              </div>
+              <div class="flex items-center justify-between py-2 px-1">
+                <span>
+                  <%= t('notify_when_form_is_started') %>
+                </span>
+                <submit-form data-on="change" class="flex">
+                  <%= ff.check_box :started_notification_email_enabled, { checked: ff.object.started_notification_email_enabled == true, class: 'toggle' }, 'true', 'false' %>
+                </submit-form>
+              </div>
+              <div class="flex items-center justify-between py-2 px-1">
+                <span>
+                  <%= t('notify_when_form_is_declined') %>
+                </span>
+                <submit-form data-on="change" class="flex">
+                  <%= ff.check_box :declined_notification_email_enabled, { checked: ff.object.declined_notification_email_enabled != false, class: 'toggle' }, 'true', 'false' %>
+                </submit-form>
+              </div>
+              <div class="flex items-center justify-between py-2 px-1 mb-2">
+                <span>
+                  <%= t('notify_when_submission_expires') %>
+                </span>
+                <submit-form data-on="change" class="flex">
+                  <%= ff.check_box :expired_notification_email_enabled, { checked: ff.object.expired_notification_email_enabled != false, class: 'toggle' }, 'true', 'false' %>
+                </submit-form>
+              </div>
+            <% end %>
+            <div class="form-control pt-2">
+              <%= f.button button_title(title: t('save'), disabled_with: t('saving')), class: 'base-button' %>
+              <div class="flex justify-center">
+                <span id="events_saved_alert" class="text-sm invisible font-normal mt-0.5"><%= t('changes_have_been_saved') %></span>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
     </div>
     <%= render 'templates_code_modal/preferences', class: 'pt-2' %>
   </div>

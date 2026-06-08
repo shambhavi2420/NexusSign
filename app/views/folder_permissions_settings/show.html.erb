@@ -1,0 +1,100 @@
+<div class="flex flex-wrap space-y-4 md:flex-nowrap md:space-y-0">
+  <%= render 'shared/settings_nav' %>
+  <div class="flex-grow max-w-xl mx-auto">
+    <h1 class="text-4xl font-bold mb-4">
+      <%= t('folder_permissions') %>
+    </h1>
+
+    <% if @folders.any? %>
+      <folder-permissions-manager data-csrf="<%= form_authenticity_token %>"
+                                   data-users="<%= @users.as_json(only: %i[id email first_name last_name role]).to_json %>"
+                                   data-teams="<%= @teams.as_json(only: %i[id name]).to_json %>">
+        <!-- Folder Selector -->
+        <div class="form-control w-full mb-6">
+          <label class="label" for="folder_select">
+            <span class="label-text font-medium"><%= t('select_folder') %></span>
+          </label>
+          <select id="folder_select" class="select select-bordered w-full"
+                  aria-label="<%= t('select_folder') %>">
+            <option value="" disabled selected><%= t('choose_a_folder') %></option>
+            <% @folders.each do |folder| %>
+              <option value="<%= folder.id %>"
+                      data-owner-id="<%= folder.author_id %>">
+                <%= truncate(folder.full_name, length: 100) %>
+              </option>
+            <% end %>
+          </select>
+        </div>
+
+        <!-- Permissions Panel (shown after folder selection) -->
+        <div id="permissions_panel" class="hidden">
+          <!-- User List -->
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold mb-3"><%= t('permitted_users') %></h2>
+            <div id="unrestricted_message" class="hidden alert alert-info">
+              <span><%= t('all_account_members_have_access') %></span>
+            </div>
+            <div id="loading_indicator" class="hidden flex justify-center py-4">
+              <span class="loading loading-spinner loading-md"></span>
+            </div>
+            <div id="error_message" class="hidden alert alert-error mb-4">
+              <span></span>
+            </div>
+            <div id="users_table_container" class="overflow-y-auto max-h-[400px]">
+              <table class="table w-full" role="grid">
+                <thead>
+                  <tr>
+                    <th scope="col"><%= t('name') %></th>
+                    <th scope="col"><%= t('email') %></th>
+                    <th scope="col"><%= t('role') %></th>
+                    <th scope="col"><span class="sr-only"><%= t('actions') %></span></th>
+                  </tr>
+                </thead>
+                <tbody id="users_list">
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Grant Form -->
+          <div id="grant_section" class="border-t pt-4">
+            <h2 class="text-2xl font-bold mb-3"><%= t('grant_access') %></h2>
+            <div id="no_users_message" class="hidden text-sm text-base-content/70">
+              <%= t('no_additional_users_available') %>
+            </div>
+            <div id="grant_form_container">
+              <div class="flex flex-wrap gap-2 items-end">
+                <div class="form-control flex-grow">
+                  <label class="label" for="user_select">
+                    <span class="label-text"><%= t('select_user') %></span>
+                  </label>
+                  <select id="user_select" class="select select-bordered w-full"
+                          aria-label="<%= t('select_user_to_grant_access') %>">
+                    <option value="" disabled selected><%= t('choose_a_user') %></option>
+                  </select>
+                </div>
+                <button id="grant_button" type="button" class="btn btn-primary min-h-[44px] min-w-[44px]"
+                        disabled aria-label="<%= t('grant_access') %>">
+                  <%= t('grant') %>
+                </button>
+              </div>
+              <div id="grant_error" class="hidden text-error text-sm mt-1"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Message -->
+        <div id="status_message" class="hidden toast toast-end toast-bottom" role="status" aria-live="polite">
+          <div class="alert">
+            <span></span>
+          </div>
+        </div>
+      </folder-permissions-manager>
+    <% else %>
+      <p class="text-base-content/70">
+        <%= t('no_folders_available_for_permission_management') %>
+      </p>
+    <% end %>
+  </div>
+  <div class="w-0 md:w-52"></div>
+</div>

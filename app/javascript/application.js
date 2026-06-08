@@ -19,6 +19,7 @@ import SetTimezone from './elements/set_timezone'
 import AutoresizeTextarea from './elements/autoresize_textarea'
 import SubmittersAutocomplete from './elements/submitter_autocomplete'
 import FolderAutocomplete from './elements/folder_autocomplete'
+import FolderPermissionsManager from './elements/folder_permissions_manager'
 import SignatureForm from './elements/signature_form'
 import SubmitForm from './elements/submit_form'
 import PromptPassword from './elements/prompt_password'
@@ -107,6 +108,7 @@ safeRegisterElement('set-timezone', SetTimezone)
 safeRegisterElement('autoresize-textarea', AutoresizeTextarea)
 safeRegisterElement('submitters-autocomplete', SubmittersAutocomplete)
 safeRegisterElement('folder-autocomplete', FolderAutocomplete)
+safeRegisterElement('folder-permissions-manager', FolderPermissionsManager)
 safeRegisterElement('signature-form', SignatureForm)
 safeRegisterElement('submit-form', SubmitForm)
 safeRegisterElement('prompt-password', PromptPassword)

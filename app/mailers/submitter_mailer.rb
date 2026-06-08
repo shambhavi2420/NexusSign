@@ -105,6 +105,57 @@ class SubmitterMailer < ApplicationMailer
     end
   end
 
+  def viewed_email(submitter, user)
+    @current_account = submitter.submission.account
+    @submitter = submitter
+    @submission = submitter.submission
+    @user = user
+
+    assign_message_metadata('submitter_viewed', @submitter)
+
+    I18n.with_locale(@current_account.locale) do
+      mail(from: from_address_for_submitter(submitter),
+           to: user.role == 'integration' ? user.friendly_name.sub(/\+\w+@/, '@') : user.friendly_name,
+           subject: I18n.t(:form_name_has_been_viewed_by_submitter,
+                           name: (@submission.name || @submission.template.name).truncate(20),
+                           submitter: @submitter.name || @submitter.email || @submitter.phone))
+    end
+  end
+
+  def started_email(submitter, user)
+    @current_account = submitter.submission.account
+    @submitter = submitter
+    @submission = submitter.submission
+    @user = user
+
+    assign_message_metadata('submitter_started', @submitter)
+
+    I18n.with_locale(@current_account.locale) do
+      mail(from: from_address_for_submitter(submitter),
+           to: user.role == 'integration' ? user.friendly_name.sub(/\+\w+@/, '@') : user.friendly_name,
+           subject: I18n.t(:form_name_has_been_started_by_submitter,
+                           name: (@submission.name || @submission.template.name).truncate(20),
+                           submitter: @submitter.name || @submitter.email || @submitter.phone))
+    end
+  end
+
+  def expired_email(submission, user)
+    @current_account = submission.account
+    @submission = submission
+    @user = user
+
+    submitter = submission.submitters.first
+
+    assign_message_metadata('submission_expired', submitter) if submitter
+
+    I18n.with_locale(@current_account.locale) do
+      mail(from: submitter ? from_address_for_submitter(submitter) : self.class.default[:from],
+           to: user.role == 'integration' ? user.friendly_name.sub(/\+\w+@/, '@') : user.friendly_name,
+           subject: I18n.t(:submission_name_has_expired,
+                           name: (@submission.name || @submission.template.name).truncate(40)))
+    end
+  end
+
   def documents_copy_email(submitter, to: nil, sig: false)
     @current_account = submitter.submission.account
     @submitter = submitter

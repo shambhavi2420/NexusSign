@@ -38,6 +38,7 @@ class Account < ApplicationRecord
   has_many :account_testing_accounts, -> { testing }, dependent: :destroy,
                                                       class_name: 'AccountLinkedAccount',
                                                       inverse_of: :account
+  has_many :teams, dependent: :destroy
   has_one :linked_account_account, dependent: :destroy,
                                    foreign_key: :linked_account_id,
                                    class_name: 'AccountLinkedAccount',

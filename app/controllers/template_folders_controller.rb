@@ -3,12 +3,19 @@
 class TemplateFoldersController < ApplicationController
   load_and_authorize_resource :template_folder
 
+  before_action :authorize_admin_for_edit, only: %i[edit update]
+
   helper_method :selected_order
 
   TEMPLATES_PER_PAGE = 12
   FOLDERS_PER_PAGE = 18
 
   def show
+    unless TemplateFolderPermissions.can_view?(current_user, @template_folder)
+      redirect_to root_path, alert: I18n.t('not_authorized')
+      return
+    end
+
     @templates = Template.active.accessible_by(current_ability)
                          .where(folder: [@template_folder, *(params[:q].present? ? @template_folder.subfolders : [])])
                          .preload(:author, :template_accesses)
@@ -66,6 +73,12 @@ class TemplateFoldersController < ApplicationController
 
   def template_folder_params
     params.require(:template_folder).permit(:name)
+  end
+
+  def authorize_admin_for_edit
+    return if current_user.role == User::ADMIN_ROLE
+
+    redirect_to folder_path(@template_folder), alert: I18n.t('not_authorized')
   end
 
   def load_related_submissions

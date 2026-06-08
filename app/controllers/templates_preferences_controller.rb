@@ -29,7 +29,9 @@ class TemplatesPreferencesController < ApplicationController
                       default_expire_at_duration shared_link_2fa
                       default_expire_at request_email_enabled
                       completed_notification_email_subject completed_notification_email_body
-                      completed_notification_email_enabled completed_notification_email_attach_audit] +
+                      completed_notification_email_enabled completed_notification_email_attach_audit
+                      viewed_notification_email_enabled started_notification_email_enabled
+                      declined_notification_email_enabled expired_notification_email_enabled] +
                       [completed_message: %i[title body],
                        submitters: [%i[uuid request_email_subject request_email_body]], link_form_fields: []]
     ).tap do |attrs|

@@ -259,6 +259,19 @@ en: &en
   skip: Skip
   email_notifications: Email Notifications
   receive_notification_emails_on_completed_submission: Receive notification emails on completed submission
+  receive_notification_emails_on_declined_submission: Receive notification emails on declined submission
+  receive_notification_emails_on_form_viewed: Receive notification emails when a form is viewed
+  receive_notification_emails_on_form_started: Receive notification emails when a form is started
+  receive_notification_emails_on_submission_expired: Receive notification emails when a submission expires
+  form_name_has_been_viewed_by_submitter: "%{name} has been viewed by %{submitter}"
+  form_name_has_been_started_by_submitter: "%{name} has been started by %{submitter}"
+  submission_name_has_expired: "%{name} has expired"
+  notification_events: Notification Events
+  choose_which_events_trigger_notification_emails: Choose which events should trigger notification emails for this template.
+  notify_when_form_is_viewed: Send email when form is viewed
+  notify_when_form_is_started: Send email when form is started
+  notify_when_form_is_declined: Send email when form is declined
+  notify_when_submission_expires: Send email when submission expires
   completed_documents_notification_bcc_address: Completed documents notification BCC address
   sign_request_email_reminders: Sign Request Email Reminders
   send_automatic_email_reminders_to_your_recipients: Send automatic email reminders to your recipients.
@@ -952,6 +965,35 @@ en: &en
     events:
       range_with_total: "%{from}-%{to} of %{count} events"
       range_without_total: "%{from}-%{to} events"
+  folder_permissions: Folder Permissions
+  select_folder: Select Folder
+  choose_a_folder: Choose a folder
+  permitted_users: Permitted Users
+  all_account_members_have_access: All account members have access to this folder
+  grant_access: Grant Access
+  select_user_to_grant_access: Select a user to grant access
+  choose_a_user: Choose a user
+  grant: Grant
+  no_additional_users_available: No additional users available
+  no_folders_available_for_permission_management: No folders available for permission management
+  not_authorized: Not authorized
+  teams: Teams
+  new_team: New Team
+  team_name: Team name
+  rename_team: Rename Team
+  team_has_been_created: Team has been created
+  team_has_been_updated: Team has been updated
+  team_has_been_removed: Team has been removed
+  no_teams_yet: No teams have been created yet
+  members: Members
+  add_member: Add Member
+  no_members_in_team: No members in this team yet
+  user_added_to_team: User has been added to the team
+  user_removed_from_team: User has been removed from the team
+  user_not_found: User not found
+  manage: Manage
+  add: Add
+  select_user: Select user
 
 es: &es
   add_from_google_drive: Agregar desde Google Drive

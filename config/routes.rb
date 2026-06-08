@@ -201,6 +201,10 @@ Rails.application.routes.draw do
                                defaults: { status: :archived }
     resources :integration_users, only: %i[index], path: 'users/:status', controller: 'users',
                                   defaults: { status: :integration }
+    resources :teams, only: %i[index new create show edit update destroy] do
+      resources :memberships, only: %i[create destroy], controller: 'team_memberships'
+    end
+    resource :folder_permissions, only: %i[show], controller: 'folder_permissions_settings'
     resource :personalization, only: %i[show create], controller: 'personalization_settings'
     resources :webhooks, only: %i[index show new create update destroy], controller: 'webhook_settings' do
       post :resend

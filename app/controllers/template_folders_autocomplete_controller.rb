@@ -13,13 +13,16 @@ class TemplateFoldersAutocompleteController < ApplicationController
         params[:q].to_s.split(' /', 2).map(&:squish)
       end
 
+    # Filter folders by user's folder-level permissions so revoked folders don't appear
+    permitted_folders = TemplateFolderPermissions.visible_to(@template_folders, current_user)
+
     if name
-      parent_folder = @template_folders.find_by(name: parent_name, parent_folder_id: nil)
+      parent_folder = permitted_folders.find_by(name: parent_name, parent_folder_id: nil)
     else
       name = parent_name
     end
 
-    template_folders = TemplateFolders.filter_active_folders(@template_folders.where(parent_folder:),
+    template_folders = TemplateFolders.filter_active_folders(permitted_folders.where(parent_folder:),
                                                              Template.accessible_by(current_ability))
 
     name = name.to_s.downcase

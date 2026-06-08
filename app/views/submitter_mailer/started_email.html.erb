@@ -1,0 +1,3 @@
+<p><%= t('hi_there') %>,</p>
+<p><%= t('form_name_has_been_started_by_submitter', name: @submitter.submission.name || @submitter.submission.template.name, submitter: @submitter.name || @submitter.email || @submitter.phone) %></p>
+<p><%= link_to submission_url(@submitter.submission), submission_url(@submitter.submission) %></p>

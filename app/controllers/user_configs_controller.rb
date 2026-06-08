@@ -6,6 +6,10 @@ class UserConfigsController < ApplicationController
 
   ALLOWED_KEYS = [
     UserConfig::RECEIVE_COMPLETED_EMAIL,
+    UserConfig::RECEIVE_DECLINED_EMAIL,
+    UserConfig::RECEIVE_VIEWED_EMAIL,
+    UserConfig::RECEIVE_STARTED_EMAIL,
+    UserConfig::RECEIVE_EXPIRED_EMAIL,
     UserConfig::SHOW_APP_TOUR
   ].freeze
 
