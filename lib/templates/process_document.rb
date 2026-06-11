@@ -191,7 +191,7 @@ module Templates
     end
 
     def normalize_attachment_fields(template, attachments = template.documents)
-      attachments.flat_map do |a|
+      fields = attachments.flat_map do |a|
         pdf_fields = a.metadata['pdf'].delete('fields').to_a if a.metadata['pdf'].present?
 
         next [] if pdf_fields.blank?
@@ -199,6 +199,36 @@ module Templates
         pdf_fields.each { |f| f['submitter_uuid'] = template.submitters.first['uuid'] }
 
         pdf_fields
+      end
+
+      apply_smart_field_mapping(fields)
+    end
+
+    FIELD_NAME_MAPPINGS = {
+      full_name: { pattern: /\b(full\s*name|fullname|signer\s*name|employee\s*name|print\s*name)\b/i,
+                   type: 'text', name: 'Signer Full Name' },
+      signature: { pattern: /\b(signature|sign here|signer)\b/i,
+                   type: 'signature', name: 'Signature' },
+      date:      { pattern: /\b(date|signed\s*date|date\s*signed)\b/i,
+                   type: 'date', name: 'Date' },
+      initials:  { pattern: /\b(initials?)\b/i,
+                   type: 'initials', name: 'Initials' }
+    }.freeze
+
+    def apply_smart_field_mapping(fields)
+      fields.map do |field|
+        field_name = field['name'].to_s
+
+        matched = FIELD_NAME_MAPPINGS.values.find { |mapping| field_name.match?(mapping[:pattern]) }
+
+        if matched
+          field.merge(
+            'type' => matched[:type],
+            'name' => matched[:name]
+          )
+        else
+          field
+        end
       end
     end
 

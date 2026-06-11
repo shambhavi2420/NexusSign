@@ -51,6 +51,9 @@
         <li>
           <%= link_to t('teams'), settings_teams_path, class: 'text-base hover:bg-base-300' %>
         </li>
+        <li>
+          <%= link_to t('data_migration'), data_migration_path, class: 'text-base hover:bg-base-300' %>
+        </li>
       <% end %>
       <%= render 'shared/settings_nav_extra' %>
       <% if Docuseal.demo? || !Docuseal.multitenant? %>

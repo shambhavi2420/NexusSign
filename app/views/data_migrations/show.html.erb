@@ -1,0 +1,108 @@
+<div class="flex flex-wrap space-y-4 md:flex-nowrap md:space-y-0 md:space-x-10">
+  <%= render 'shared/settings_nav' %>
+  <div class="flex-grow max-w-3xl">
+    <h1 class="text-4xl font-bold mb-4"><%= I18n.t('data_migration') %></h1>
+
+    <div class="card bg-base-200 shadow-xl p-6 mb-6">
+      <h2 class="text-lg font-semibold mb-4"><%= I18n.t('bulk_upload_templates') %></h2>
+      <p class="text-sm text-base-content/70 mb-4">
+        <%= I18n.t('upload_multiple_pdf_files_to_create_templates_in_bulk') %>
+      </p>
+
+      <%= form_with url: data_migration_path, method: :post, multipart: true, class: 'space-y-4' do |f| %>
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-medium"><%= I18n.t('folder_name') %></span>
+          </label>
+          <input type="text" name="folder_name" placeholder="<%= I18n.t('leave_empty_for_default_folder') %>"
+                 class="input input-bordered w-full" />
+          <label class="label">
+            <span class="label-text-alt text-base-content/60">
+              <%= I18n.t('supports_nested_folders_with_format') %>: Parent / Child
+            </span>
+          </label>
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text font-medium"><%= I18n.t('select_files') %></span>
+          </label>
+          <input type="file" name="files[]" multiple accept=".pdf,.png,.jpg,.jpeg"
+                 class="file-input file-input-bordered w-full" required />
+          <label class="label">
+            <span class="label-text-alt text-base-content/60">
+              <%= I18n.t('accepted_formats') %>: PDF, PNG, JPG
+            </span>
+          </label>
+        </div>
+
+        <div class="form-control mt-4">
+          <button type="submit" class="btn btn-primary">
+            <%= svg_icon('upload', class: 'w-5 h-5 mr-2') %>
+            <%= I18n.t('upload_and_create_templates') %>
+          </button>
+        </div>
+      <% end %>
+    </div>
+
+    <% if session[:data_migration_results].present? %>
+      <% parsed_data = JSON.parse(session[:data_migration_results]) %>
+      <% if parsed_data.is_a?(Array) %>
+        <% results = parsed_data %>
+        <% completed_at = nil %>
+      <% else %>
+        <% results = parsed_data['results'] %>
+        <% completed_at = parsed_data['completed_at'] %>
+      <% end %>
+      <div class="card bg-base-200 shadow-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-semibold"><%= I18n.t('migration_results') %></h2>
+            <% if completed_at.present? %>
+              <p class="text-sm text-base-content/60">
+                <%= I18n.t('run_on') %>: <%= Time.parse(completed_at).strftime('%B %d, %Y at %I:%M %p') %>
+              </p>
+            <% else %>
+              <p class="text-sm text-base-content/60">
+                <%= I18n.t('run_on') %>: <%= I18n.t('unknown_date') %>
+              </p>
+            <% end %>
+          </div>
+          <% if results.any? { |r| r['status'] == 'success' } %>
+            <%= link_to I18n.t('export_to_excel'), export_data_migration_path,
+                class: 'btn btn-success btn-sm' %>
+          <% end %>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="table table-zebra w-full">
+            <thead>
+              <tr>
+                <th><%= I18n.t('status') %></th>
+                <th><%= I18n.t('file_name') %></th>
+                <th><%= I18n.t('template_name') %></th>
+                <th><%= I18n.t('template_id') %></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% results.each do |result| %>
+                <tr>
+                  <td>
+                    <% if result['status'] == 'success' %>
+                      <span class="badge badge-success"><%= I18n.t('success') %></span>
+                    <% else %>
+                      <span class="badge badge-error" title="<%= result['error'] %>"><%= I18n.t('failed') %></span>
+                    <% end %>
+                  </td>
+                  <td><%= result['file_name'] %></td>
+                  <td><%= result['template_name'] %></td>
+                  <td><%= result['template_id'] || '-' %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>

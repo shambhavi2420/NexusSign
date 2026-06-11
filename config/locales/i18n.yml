@@ -977,6 +977,26 @@ en: &en
   no_additional_users_available: No additional users available
   no_folders_available_for_permission_management: No folders available for permission management
   not_authorized: Not authorized
+  data_migration: Data Migration
+  bulk_upload_templates: Bulk Upload Templates
+  upload_multiple_pdf_files_to_create_templates_in_bulk: Upload multiple PDF files to create templates in bulk. Each file will become a separate template named after the file.
+  no_files_selected: No files selected. Please choose files to upload.
+  bulk_upload_completed: "Bulk upload completed: %{success} succeeded, %{failed} failed."
+  no_results_to_export: No results available to export.
+  no_successful_templates_to_export: No successful templates to export.
+  upload_and_create_templates: Upload and Create Templates
+  leave_empty_for_default_folder: Leave empty for Default folder
+  supports_nested_folders_with_format: "Supports nested folders with format"
+  select_files: Select Files
+  accepted_formats: Accepted formats
+  migration_results: Migration Results
+  run_on: Run on
+  unknown_date: Unknown (prior run)
+  export_to_excel: Export to Excel
+  file_name: File Name
+  template_name: Template Name
+  success: Success
+  failed: Failed
   teams: Teams
   new_team: New Team
   team_name: Team name

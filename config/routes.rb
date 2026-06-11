@@ -107,6 +107,9 @@ Rails.application.routes.draw do
   authenticated do
     resource :templates_upload, only: %i[show], path: 'new'
   end
+  resource :data_migration, only: %i[show create] do
+    get :export, on: :collection
+  end
   resources :templates_archived, only: %i[index], path: 'templates/archived'
   resources :folders, only: %i[show edit update destroy], controller: 'template_folders' do
     resources :permissions, only: %i[index create destroy], controller: 'template_folder_permissions'
