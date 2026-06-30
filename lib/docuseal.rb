@@ -6,7 +6,7 @@ module Docuseal
   PRODUCT_EMAIL_URL = ''
   NEWSLETTER_URL = ''
   ENQUIRIES_URL = ''
-  PRODUCT_NAME = 'NexusSign'
+  PRODUCT_NAME = 'NexusSIGN'
   DEFAULT_APP_URL = ENV.fetch('APP_URL', 'http://localhost:3000')
   GITHUB_URL = ''
   DISCORD_URL = ''

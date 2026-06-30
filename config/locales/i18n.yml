@@ -49,15 +49,15 @@ en: &en
   accessiable_by: Accessible by
   team_access: Team access
   document_download_filename_format: Document download filename format
-  docuseal_trusted_signature: NexusSign Trusted Signature
+  docuseal_trusted_signature: NexusSIGN Trusted Signature
   hello_name: Hello %{name}
   you_are_invited_to_product_name: You are invited to %{product_name}
   you_have_been_invited_to_account_name_product_name_please_sign_up_using_the_link_below_: 'You have been invited to %{account_name} %{product_name}. Please sign up using the link below:'
-  sent_using_product_name_in_testing_mode_html: 'Sent using NexusSign'
-  sent_using_product_name_free_document_signing_html: 'Sent using NexusSign'
-  sent_with_docuseal_pro_html: 'Sent using NexusSign'
+  sent_using_product_name_in_testing_mode_html: 'Sent using NexusSIGN'
+  sent_using_product_name_free_document_signing_html: 'Sent using NexusSIGN'
+  sent_with_docuseal_pro_html: 'Sent using NexusSIGN'
   show_send_with_docuseal_pro_attribution_in_emails_html: Show "Sent with <span class="link"></span>" attribution in emails
-  sign_documents_with_trusted_certificate_provided_by_docu_seal_your_documents_and_data_are_never_shared_with_docu_seal_p_d_f_checksum_is_provided_to_generate_a_trusted_signature: Sign documents with trusted certificate provided by NexusSign. PDF checksum is provided to generate a trusted signature.
+  sign_documents_with_trusted_certificate_provided_by_docu_seal_your_documents_and_data_are_never_shared_with_docu_seal_p_d_f_checksum_is_provided_to_generate_a_trusted_signature: Sign documents with trusted certificate provided by NexusSIGN. PDF checksum is provided to generate a trusted signature.
   you_have_been_invited_to_submit_the_name_form: 'You have been invited to submit the "%{name}" form.'
   you_have_been_invited_to_sign_the_name: 'You have been invited to sign the "%{name}".'
   alternatively_you_can_review_and_download_your_copy_using_the_link_below: "Alternatively, you can review and download your copy using the link below:"
