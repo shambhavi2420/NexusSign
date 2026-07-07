@@ -21,9 +21,7 @@ class FolderPermissionsSettingsController < ApplicationController
   end
 
   def manageable_folders
-    scope = current_account.template_folders.active
-              .where.not(name: TemplateFolder::DEFAULT_NAME)
-              .order(:name)
+    scope = current_account.template_folders.active.order(:name)
 
     scope = if current_user.role == User::ADMIN_ROLE
               scope

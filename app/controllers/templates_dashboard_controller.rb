@@ -52,20 +52,27 @@ class TemplatesDashboardController < ApplicationController
     rel = templates.active
 
     if params[:q].blank?
-      if Docuseal.multitenant? ? current_account.testing? : current_account.linked_account_account
-        shared_account_ids = [current_user.account_id]
-        shared_account_ids << TemplateSharing::ALL_ID if !Docuseal.multitenant? && !current_account.testing?
+      default_folder = current_account.default_template_folder
 
-        shared_template_ids = TemplateSharing.where(account_id: shared_account_ids).select(:template_id)
+      if TemplateFolderPermissions.can_view?(current_user, default_folder)
+        if Docuseal.multitenant? ? current_account.testing? : current_account.linked_account_account
+          shared_account_ids = [current_user.account_id]
+          shared_account_ids << TemplateSharing::ALL_ID if !Docuseal.multitenant? && !current_account.testing?
 
-        rel = Template.where(
-          Template.arel_table[:id].in(
-            rel.where(folder_id: current_account.default_template_folder.id).select(:id).arel
-               .union(:all, shared_template_ids.arel)
+          shared_template_ids = TemplateSharing.where(account_id: shared_account_ids).select(:template_id)
+
+          rel = Template.where(
+            Template.arel_table[:id].in(
+              rel.where(folder_id: default_folder.id).select(:id).arel
+                 .union(:all, shared_template_ids.arel)
+            )
           )
-        )
+        else
+          rel = rel.where(folder_id: default_folder.id)
+        end
       else
-        rel = rel.where(folder_id: current_account.default_template_folder.id)
+        # User cannot view the Default folder — show no templates from it
+        rel = rel.none
       end
     end
 

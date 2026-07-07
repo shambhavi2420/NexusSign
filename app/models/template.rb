@@ -85,7 +85,17 @@ class Template < ApplicationRecord
   private
 
   def maybe_set_default_folder
-    self.folder ||= account.default_template_folder
+    return if folder.present?
+
+    default_folder = account.default_template_folder
+
+    if author && TemplateFolderPermissions.restricted?(default_folder) &&
+       !TemplateFolderPermissions.can_view?(author, default_folder)
+      self.folder = account.template_folders.create_with(author:)
+                           .find_or_create_by(name: author.full_name.presence || author.email, parent_folder_id: nil)
+    else
+      self.folder = default_folder
+    end
   end
 
 

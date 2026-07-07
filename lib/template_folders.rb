@@ -75,7 +75,19 @@ module TemplateFolders
   end
 
   def find_or_create_by_name(author, name)
-    return author.account.default_template_folder if name.blank? || name == TemplateFolder::DEFAULT_NAME
+    if name.blank? || name == TemplateFolder::DEFAULT_NAME
+      default_folder = author.account.default_template_folder
+
+      # If the Default folder is restricted and the user can't access it,
+      # create/use a personal folder instead
+      if TemplateFolderPermissions.restricted?(default_folder) &&
+         !TemplateFolderPermissions.can_view?(author, default_folder)
+        return author.account.template_folders.create_with(author:)
+                     .find_or_create_by(name: author.full_name.presence || author.email, parent_folder_id: nil)
+      end
+
+      return default_folder
+    end
 
     parent_name, name = name.to_s.split(' / ', 2).map(&:squish)
 
