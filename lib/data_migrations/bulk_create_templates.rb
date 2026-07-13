@@ -96,7 +96,6 @@ module DataMigrations
 
       if template.fields.blank?
         template.fields = Templates::ProcessDocument.normalize_attachment_fields(template, documents)
-        schema.each { |item| item['pending_fields'] = true } if template.fields.present?
       end
 
       # Merge in the Sertifi/SFLD-derived fields from both extraction paths

@@ -18,7 +18,7 @@ class PdfFieldParser
   # these fields get autofilled the same way (e.g. via Submitters::MaybeUpdateDefaultValues).
   SERTIFI_TAG_MAPPINGS = {
     # Sertifi action tags
-    /\ASertifiDate/i        => { type: 'datenow', name: 'Date Signed' },
+    /\ASertifiDate/i        => { type: 'date', name: 'Date Field 1' },
     /\ASertifiSStamp/i      => { type: 'signature', name: 'Signature' },
     /\ASertifiSignature/i   => { type: 'signature', name: 'Signature' },
     /\ASertifiInitials/i    => { type: 'initials', name: 'Initials' },
