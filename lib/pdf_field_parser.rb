@@ -9,6 +9,48 @@ require 'hexapdf'
 
 class PdfFieldParser
   FIELD_TAG_REGEX = /\{\{([^}]+)\}\}/
+  SERTIFI_TAG_REGEX = /\[\[([^\]]+)\]\]/
+
+  # Maps Sertifi tag patterns to NexusSign field types.
+  # Order matters - more specific patterns must come before generic ones.
+  # Field `type` values reuse the exact same custom candidate/signer field type
+  # strings used by the existing {{Tag;role=...;type=...}} API convention, so
+  # these fields get autofilled the same way (e.g. via Submitters::MaybeUpdateDefaultValues).
+  SERTIFI_TAG_MAPPINGS = {
+    # Sertifi action tags
+    /\ASertifiDate/i        => { type: 'datenow', name: 'Date Signed' },
+    /\ASertifiSStamp/i      => { type: 'signature', name: 'Signature' },
+    /\ASertifiSignature/i   => { type: 'signature', name: 'Signature' },
+    /\ASertifiInitials/i    => { type: 'initials', name: 'Initials' },
+    /\ASertifiText/i        => { type: 'text', name: 'Text' },
+    /\ASertifiCheckbox/i    => { type: 'checkbox', name: 'Checkbox' },
+    # SFLD candidate/signer data fields - matches the field tray types used in
+    # app/javascript/template_builder/field_type.vue. Per business rule:
+    # FirstName, LastName, FullName, Primary Phone, and Email map to "Signer"
+    # fields; all other candidate data (address, city, state, zip, ssn,
+    # profession, specialty, availability) maps to "Candidate" fields.
+    /\ASFLD:FullName/i          => { type: 'signerfullname', name: 'Signer Full Name' },
+    /\ASFLD:LastName/i          => { type: 'signerlastname', name: 'Signer Last Name' },
+    /\ASFLD:FirstName/i         => { type: 'signerfirstname', name: 'Signer First Name' },
+    /\ASFLD:Email/i             => { type: 'signeremail', name: 'Signer Email' },
+    /\ASFLD:PrimaryPhone/i      => { type: 'signerprimaryphone', name: 'Signer Primary Phone' },
+    /\ASFLD:Address/i           => { type: 'candidatepermanentaddress1', name: 'Candidate Permanent Address 1' },
+    /\ASFLD:City/i              => { type: 'candidatepermanentcity', name: 'Candidate Permanent City' },
+    /\ASFLD:State/i             => { type: 'candidatepermanentstate', name: 'Candidate Permanent State' },
+    /\ASFLD:ZipCode/i           => { type: 'candidatepermanentzip', name: 'Candidate Permanent Zip' },
+    /\ASFLD:FullSSN/i           => { type: 'candidatessn', name: 'Candidate SSN', preferences: { 'mask' => true } },
+    /\ASFLD:AvailabilityDate/i  => { type: 'candidateavailablefrom', name: 'Candidate Available From' },
+    /\ASFLD:PrimaryProfession/i => { type: 'candidateprimaryprofession', name: 'Candidate Primary Profession' },
+    /\ASFLD:PrimarySpecialty/i  => { type: 'candidateprimaryspecialty', name: 'Candidate Primary Specialty' },
+    /\ASFLD:Company/i       => { type: 'text', name: 'Company' },
+    /\ASFLD:Title/i         => { type: 'text', name: 'Title' },
+    /\ASFLD:Name/i          => { type: 'signerfullname', name: 'Signer Full Name' },
+    /\ASFLD:/i              => { type: 'text', name: nil } # Generic SFLD fallback
+  }.freeze
+
+  # Default dimensions for SFLD fields (in PDF points)
+  SFLD_DEFAULT_WIDTH = 100
+  SFLD_DEFAULT_HEIGHT = 15
 
   attr_reader :pdf_path, :parsed_fields, :submitters, :tag_positions
 
@@ -21,6 +63,11 @@ class PdfFieldParser
 
   def self.call(pdf_path)
     new(pdf_path).parse
+  end
+
+  # Class-level accessor for parsing Sertifi tag attributes from external callers
+  def self.parse_sertifi_attributes(tag_content)
+    new('').send(:parse_sertifi_tag_attributes, tag_content)
   end
 
   def parse
@@ -82,66 +129,44 @@ class PdfFieldParser
 
   private
 
+  # Use PDF::Reader's own PageTextReceiver for text extraction. It correctly
+  # decodes text through the font's ToUnicode CMap (including CID/Type0 fonts
+  # like embedded Calibri subsets), which our previous hand-rolled receiver did
+  # not do - that caused tags rendered with certain embedded fonts to come
+  # through as garbled glyph bytes instead of readable "[[SFLD:...]]" text.
+  #
+  # Runs are gathered at the CHARACTER level (merge: false) and grouped into
+  # visual lines by baseline y-coordinate. Tags are then scanned for across
+  # each line's full text, and also across line boundaries, because some
+  # source documents word-wrap a tag mid-token (e.g. "[[SFLD:State:W=100,H=15,R="
+  # on one line and "True]]" on the next).
   def extract_tags_from_page(page, page_index)
-  receiver = PreciseTextReceiver.new(page)
-  page.walk(receiver)
+    receiver = PDF::Reader::PageTextReceiver.new
+    receiver.page = page
+    page.walk(receiver)
 
-  puts "Page #{page_index}: #{receiver.text_runs.size} text runs"
-  receiver.text_runs.each do |run|
-  puts "  RUN[#{page_index}]: #{run[:text].inspect}"
-  end
+    page_width = page.width
+    page_height = page.height
 
-  page_width = page.width
-  page_height = page.height
+    chars = receiver.runs(skip_overlapping: false, skip_zero_width: false, merge: false)
+    lines = group_chars_into_lines(chars)
 
-  receiver.text_runs.each do |text_run|
-    text = text_run[:text]
-    next unless text.match?(FIELD_TAG_REGEX)
-    process_tags_in_text_run(text_run, page_index, page_width, page_height)
-  end
-end
-  def process_tags_in_text_run(text_run, page_index, page_width, page_height)
-    text = text_run[:text]
-    
-    text.scan(FIELD_TAG_REGEX).each do |match|
-      tag_content = match[0]
-      full_tag = "{{#{tag_content}}}"
-
-      # Find position of tag in this text run
-      tag_start_index = text.index(full_tag)
-      next unless tag_start_index
-
-      # Calculate precise position using character-level metrics
-      position = calculate_precise_tag_position(
-        text_run,
-        tag_start_index,
-        full_tag.length,
-        page_width,
-        page_height
+    scan_lines_for_tags(lines, page_index, page_width, page_height, FIELD_TAG_REGEX, '{{', '}}') do |tag_content, position|
+      field = parse_field_at_position(
+        tag_content, page_index, position[:x], position[:y],
+        position[:width], position[:height], page_width, page_height
       )
 
-      next unless position
+      if field
+        @parsed_fields << field
+        register_submitter(field[:role]) if field[:role]
+      end
+    end
 
-      # Store tag position for overlay removal - use EXACT tag width only
-      @tag_positions << {
-        page: page_index,
-        x: position[:x],
-        y: position[:y],
-        width: position[:tag_width],  # Exact tag text width
-        height: position[:height],
-        text: full_tag
-      }
-
-      # Parse and create field at this position
-      field = parse_field_at_position(
-        tag_content,
-        page_index,
-        position[:x],
-        position[:y],
-        position[:width],  # Use full width for field sizing
-        position[:height],
-        page_width,
-        page_height
+    scan_lines_for_tags(lines, page_index, page_width, page_height, SERTIFI_TAG_REGEX, '[[', ']]') do |tag_content, position|
+      field = parse_sertifi_field_at_position(
+        tag_content, page_index, position[:x], position[:y],
+        position[:width], position[:height], page_width, page_height
       )
 
       if field
@@ -151,94 +176,223 @@ end
     end
   end
 
-  def calculate_precise_tag_position(text_run, tag_start_index, tag_length, page_width, page_height)
-    font = text_run[:font]
-    font_size = text_run[:font_size]
-    text = text_run[:text]
-    tm = text_run[:text_matrix]
-    
-    # Calculate width of text before the tag
-    text_before = text[0...tag_start_index]
-    offset_before = calculate_text_width(text_before, font, font_size)
-    
-    # Calculate width of the tag itself
-    tag_text = text[tag_start_index, tag_length]
-    tag_width = calculate_text_width(tag_text, font, font_size)
-    
-    # Apply text matrix transformation to get actual position
-    # Text matrix is [a, b, c, d, e, f] where e,f are translation
-    scale_x = Math.sqrt(tm[0]**2 + tm[1]**2)
-    scale_y = Math.sqrt(tm[2]**2 + tm[3]**2)
-    
-    # Calculate transformed position
-    base_x = tm[4]
-    base_y = tm[5]
-    
-    # Apply horizontal offset for text before tag
-    tag_x = base_x + (offset_before * scale_x)
-    tag_y = base_y
-    
-    # Calculate dimensions with scaling
-    actual_tag_width = tag_width * scale_x
-    actual_tag_height = font_size * scale_y
-    
-    # Adjust for baseline (text is positioned at baseline, not top-left)
-    # Most fonts have descent of about 20-25% of font size
-    descent_ratio = 0.25
-    tag_y_adjusted = tag_y - (actual_tag_height * descent_ratio)
-    
-    {
-      x: tag_x,
-      y: tag_y_adjusted,
-      width: actual_tag_width,  # For field width estimation
-      tag_width: actual_tag_width,  # Exact tag width for covering
-      height: actual_tag_height * 1.3  # Add some vertical padding
-    }
-  rescue => e
+  # Groups individual character TextRuns into visual lines based on rounded
+  # baseline y-coordinate, sorted left-to-right within each line, then lines
+  # sorted top-to-bottom (descending y, since PDF space has y increasing upward).
+  def group_chars_into_lines(chars)
+    chars
+      .group_by { |c| c.y.round(1) }
+      .sort_by { |y, _| -y }
+      .map { |y, cs| { y: y, chars: cs.sort_by(&:x) } }
+  end
+
+  # Scans each line's concatenated text for the given tag regex.
+  #
+  # Some source documents word-wrap a tag mid-token (e.g. a narrow text box
+  # renders "[[SFLD:State:W=100,H=15,R=" on one line and "True]]" on the next),
+  # while OTHER complete, unrelated tags may visually sit on lines in between
+  # the two wrapped fragments (e.g. separate "[[SFLD:City:...]]" and
+  # "[[SFLD:ZipCode]]" boxes positioned between the wrapped State fragments).
+  #
+  # To handle this correctly: when a line ends with a dangling unclosed
+  # opening delimiter, subsequent lines that are themselves fully balanced
+  # (self-contained tags) are processed normally and NOT merged into the
+  # pending fragment. Only a line that supplies the missing closing
+  # delimiter(s) (more closes than opens) is merged in to complete the tag.
+  def scan_lines_for_tags(lines, page_index, _page_width, _page_height, regex, open_delim, close_delim)
+    pending = nil
+
+    lines.each do |line|
+      text = line[:chars].map(&:text).join
+      open_count = text.scan(open_delim).size
+      close_count = text.scan(close_delim).size
+
+      if pending
+        combined_chars = pending[:chars] + line[:chars]
+        combined_text = combined_chars.map(&:text).join
+
+        if combined_text.scan(open_delim).size == combined_text.scan(close_delim).size
+          # This line supplies the missing close - finalize the merged tag.
+          emit_tags_in_chars(combined_chars, page_index, regex, open_delim, close_delim) { |c, p| yield c, p }
+          pending = nil
+          next
+        elsif open_count == close_count
+          # Self-contained line (0 or more complete tags) - process independently,
+          # keep waiting for the real continuation on a later line.
+          emit_tags_in_chars(line[:chars], page_index, regex, open_delim, close_delim) { |c, p| yield c, p }
+          next
+        else
+          # Ambiguous continuation that still doesn't balance - give up on the
+          # pending fragment rather than risk absorbing unrelated tags, then
+          # fall through to process this line normally below.
+          pending = nil
+        end
+      end
+
+      if open_count > close_count
+        # Dangling open at the end of this line - hold as pending and keep
+        # searching forward for the line that closes it.
+        pending = { chars: line[:chars].dup }
+      else
+        emit_tags_in_chars(line[:chars], page_index, regex, open_delim, close_delim) { |c, p| yield c, p }
+      end
+    end
+  end
+
+  # Runs the tag regex over a flat array of characters (their joined text),
+  # records each match's position for white-box overlay, and yields
+  # [tag_content, position] to the caller.
+  def emit_tags_in_chars(chars, page_index, regex, open_delim, close_delim)
+    text = chars.map(&:text).join
+    pos_cursor = 0
+
+    while (match = regex.match(text, pos_cursor))
+      tag_content = match[1]
+      full_tag = "#{open_delim}#{tag_content}#{close_delim}"
+
+      position = tag_position_within_chars(chars, match.begin(0), match.end(0))
+      pos_cursor = match.end(0)
+
+      next unless position
+
+      @tag_positions << {
+        page: page_index,
+        x: position[:x],
+        y: position[:y],
+        width: position[:width],
+        height: position[:height],
+        text: full_tag
+      }
+
+      yield tag_content, position
+    end
+  end
+
+  # Computes the absolute (page-space) x/y/width/height spanning the
+  # characters between match_start_index (inclusive) and match_end_index
+  # (exclusive) within a flat array of PDF::Reader::TextRun characters.
+  # Uses the first line's y/font_size for placement, and the actual x extent
+  # of the matched characters for width (correctly handling multi-line spans
+  # by using only the width of matched chars on the first line).
+  def tag_position_within_chars(chars, match_start_index, match_end_index)
+    matched_chars = chars[match_start_index...match_end_index]
+    return nil if matched_chars.blank?
+
+    first_char = matched_chars.first
+    # Only use characters on the same baseline as the first matched character
+    # for width calculation, so multi-line tags report the first line's span.
+    same_line_chars = matched_chars.take_while { |c| c.y.round(1) == first_char.y.round(1) }
+    same_line_chars = matched_chars if same_line_chars.empty?
+
+    last_char = same_line_chars.last
+    x = first_char.x
+    width = (last_char.x + last_char.width) - first_char.x
+    font_size = first_char.font_size.to_f
+    height = font_size * 1.3
+    y_adjusted = first_char.y - (font_size * 0.25)
+
+    { x: x, y: y_adjusted, width: width, height: height }
+  rescue StandardError => e
     Rails.logger.error("Error calculating tag position: #{e.message}") if defined?(Rails)
     nil
   end
 
-  def calculate_text_width(text, font, font_size)
-    return 0 if text.nil? || text.empty? || font.nil?
-    
-    total_width = 0
-    
-    text.each_char do |char|
-      # Get character width from font metrics
-      char_width = get_char_width(font, char)
-      total_width += char_width
+  # Parse a Sertifi [[...]] tag and create field definition
+  # Format: [[TagType:Attributes]] where attributes are colon-separated key=value pairs
+  # Examples:
+  #   [[SFLD:FullName:W=100,H=15,R=True]]
+  #   [[SertifiSignature:S=1]]
+  #   [[SFLD:Email:W=100,H=15,R=True]]
+  def parse_sertifi_field_at_position(tag_content, page_index, x, y, tag_width, tag_height, page_width, page_height)
+    # Parse Sertifi tag attributes (colon-separated, with comma-separated key=value pairs)
+    sertifi_attrs = parse_sertifi_tag_attributes(tag_content)
+
+    # Look up field type/name from SERTIFI_TAG_MAPPINGS
+    mapping = SERTIFI_TAG_MAPPINGS.find { |pattern, _| tag_content.match?(pattern) }
+    return nil unless mapping
+
+    mapped = mapping[1]
+    field_type = mapped[:type]
+    field_name = mapped[:name] || sertifi_attrs[:field_name] || tag_content.split(':')[1]
+
+    # Use W/H from tag attributes if present, otherwise use defaults
+    field_width = sertifi_attrs[:width] || SFLD_DEFAULT_WIDTH
+    field_height = sertifi_attrs[:height] || SFLD_DEFAULT_HEIGHT
+
+    # Convert to relative coordinates (0-1 range)
+    rel_x = x / page_width
+    rel_y = 1.0 - ((y + field_height) / page_height)
+    rel_w = field_width / page_width
+    rel_h = field_height / page_height
+
+    # Clamp to valid ranges
+    rel_x = [[rel_x, 0].max, 0.95].min
+    rel_y = [[rel_y, 0].max, 0.95].min
+    rel_w = [[rel_w, 0.02].max, 1 - rel_x].min
+    rel_h = [[rel_h, 0.01].max, 1 - rel_y].min
+
+    # Build field
+    field = {
+      uuid: SecureRandom.uuid,
+      name: field_name,
+      type: field_type,
+      required: sertifi_attrs[:required],
+      readonly: false,
+      areas: [{
+        x: rel_x,
+        y: rel_y,
+        w: rel_w,
+        h: rel_h,
+        page: page_index
+      }]
+    }
+
+    # Apply mapped preferences (e.g., mask for SSN)
+    field[:preferences] = mapped[:preferences].dup if mapped[:preferences].present?
+
+    # Add signer index as role if present (S=1 means signer 1)
+    if sertifi_attrs[:signer]
+      field[:role] = "Signer #{sertifi_attrs[:signer]}"
     end
-    
-    # Convert from glyph space (1000 units = 1em) to user space
-    total_width * font_size / 1000.0
+
+    field
   end
 
-  def get_char_width(font, char)
-    # Try multiple methods to get character width
-    return font.glyph_width(char) if font.respond_to?(:glyph_width) && font.glyph_width(char)
-    
-    # Try to get from font metrics
-    if font.respond_to?(:widths)
-      char_code = char.ord
-      return font.widths[char_code] if font.widths && font.widths[char_code]
+  # Parse Sertifi tag format: "SFLD:FieldName:W=100,H=15,R=True"
+  # Returns hash with extracted attributes
+  def parse_sertifi_tag_attributes(tag_content)
+    parts = tag_content.split(':')
+    attrs = {
+      tag_type: parts[0],
+      field_name: parts[1],
+      width: SFLD_DEFAULT_WIDTH.to_f,
+      height: SFLD_DEFAULT_HEIGHT.to_f,
+      required: false,
+      signer: nil
+    }
+
+    # Parse remaining parts which contain comma-separated key=value pairs
+    # e.g., "W=100,H=15,R=True" or individual parts like "W=100" "H=15"
+    remaining = parts[2..] || []
+    kv_string = remaining.join(',')
+
+    kv_string.split(',').each do |pair|
+      key, value = pair.strip.split('=', 2)
+      next unless key && value
+
+      case key.upcase
+      when 'W'
+        attrs[:width] = value.to_f
+      when 'H'
+        attrs[:height] = value.to_f
+      when 'R'
+        attrs[:required] = value.casecmp('true').zero?
+      when 'S'
+        attrs[:signer] = value.to_i
+      end
     end
-    
-    # Fallback: estimate based on character type
-    case char
-    when 'i', 'l', 'I', '!', '|', '.', ',', ':', ';'
-      300  # Narrow characters
-    when 'm', 'w', 'M', 'W'
-      900  # Wide characters
-    when ' '
-      250  # Space
-    when '{'
-      400
-    when '}'
-      400
-    else
-      500  # Average character width
-    end
+
+    attrs
   end
 
   def parse_field_at_position(tag_content, page_index, x, y, tag_width, tag_height, page_width, page_height)
@@ -388,116 +542,6 @@ end
       name: role_name,
       uuid: SecureRandom.uuid
     }
-  end
-
-  # Enhanced text receiver with precise positioning using transformation matrices
-  class PreciseTextReceiver
-    attr_reader :text_runs
-
-    def initialize(page)
-      @page = page
-      @text_runs = []
-      @current_font = nil
-      @current_font_size = 12
-      @text_matrix = [1, 0, 0, 1, 0, 0]
-      @text_line_matrix = [1, 0, 0, 1, 0, 0]
-      @character_spacing = 0
-      @word_spacing = 0
-      @horizontal_scaling = 100
-      @text_rise = 0
-    end
-
-    def show_text(string, *params)
-      return if string.nil? || string.empty?
-      
-      @text_runs << {
-        text: string,
-        font: @current_font,
-        font_size: @current_font_size,
-        text_matrix: @text_matrix.dup,
-        character_spacing: @character_spacing,
-        word_spacing: @word_spacing,
-        horizontal_scaling: @horizontal_scaling,
-        text_rise: @text_rise
-      }
-    end
-
-    def show_text_with_positioning(array, *params)
-      return if array.nil? || array.empty?
-      
-      # Combine text elements from positioning array
-      text = array.select { |e| e.is_a?(String) }.join
-      show_text(text) if text.present?
-    end
-
-    # Font and text state operators
-    def set_text_font_and_size(name, size)
-      @current_font_size = size
-      # Try to get font object from page resources
-      begin
-        @current_font = @page.fonts[name] if @page.respond_to?(:fonts)
-      rescue => e
-        # Font not available, will use fallback metrics
-        @current_font = nil
-      end
-    end
-
-    def set_character_spacing(spacing)
-      @character_spacing = spacing
-    end
-
-    def set_word_spacing(spacing)
-      @word_spacing = spacing
-    end
-
-    def set_horizontal_text_scaling(scaling)
-      @horizontal_scaling = scaling
-    end
-
-    def set_text_rise(rise)
-      @text_rise = rise
-    end
-
-    # Text positioning operators
-    def set_text_matrix_and_text_line_matrix(a, b, c, d, e, f)
-      @text_matrix = [a, b, c, d, e, f]
-      @text_line_matrix = [a, b, c, d, e, f]
-    end
-
-    def move_text_position(tx, ty)
-      # Translate the text line matrix
-      @text_line_matrix[4] += tx
-      @text_line_matrix[5] += ty
-      @text_matrix = @text_line_matrix.dup
-    end
-
-    def move_text_position_and_set_leading(tx, ty)
-      move_text_position(tx, ty)
-    end
-
-    def move_to_start_of_next_line
-      # This would need the text leading value
-      # Simplified implementation
-      @text_matrix = @text_line_matrix.dup
-    end
-
-    # Graphics state operators
-    def save_graphics_state
-      # Would need to implement state stack for full precision
-    end
-
-    def restore_graphics_state
-      # Would need to implement state stack for full precision
-    end
-
-    # Catch-all for other PDF operators
-    def method_missing(method, *args)
-      # Silently ignore other PDF operations
-    end
-
-    def respond_to_missing?(method, include_private = false)
-      true
-    end
   end
 
   class ParseError < StandardError; end

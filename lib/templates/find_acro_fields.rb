@@ -89,7 +89,63 @@ module Templates
         field_properties = build_field_properties(field)
 
         next if field_properties.blank?
-        next if field_properties[:default_value].present?
+
+        # Check if the raw field name matches a Sertifi mapping (e.g., "SertifiDate_1", "SertifiSStamp_1")
+        # Also handles field names that ARE tags like "[[SFLD:FullName:W=250,H=15,R=True]]"
+        raw_name = field.full_field_name.to_s
+        sertifi_name_mapping = nil
+
+        # First check if field name contains [[...]] brackets — extract content and match
+        bracket_match = raw_name.match(PdfFieldParser::SERTIFI_TAG_REGEX)
+        if bracket_match
+          tag_content = bracket_match[1]
+          mapping = PdfFieldParser::SERTIFI_TAG_MAPPINGS.find { |pattern, _| tag_content.match?(pattern) }
+          if mapping
+            sertifi_name_mapping = mapping
+            mapped = mapping[1]
+            attrs = PdfFieldParser.parse_sertifi_attributes(tag_content)
+            field_properties[:name] = mapped[:name] || attrs[:field_name] || field_properties[:name]
+            field_properties[:type] = mapped[:type] if mapped[:type].present?
+            field_properties[:default_value] = nil
+            field_properties[:required] = attrs[:required]
+            field_properties[:preferences] = (field_properties[:preferences] || {}).merge(mapped[:preferences] || {})
+          end
+        end
+
+        # Then check bare Sertifi field names like "SertifiDate_1"
+        if !sertifi_name_mapping
+          mapping = PdfFieldParser::SERTIFI_TAG_MAPPINGS.find { |pattern, _| raw_name.match?(pattern) }
+          if mapping
+            sertifi_name_mapping = mapping
+            mapped = mapping[1]
+            field_properties[:name] = mapped[:name] if mapped[:name].present?
+            field_properties[:type] = mapped[:type] if mapped[:type].present?
+            field_properties[:default_value] = nil
+            field_properties[:preferences] = (field_properties[:preferences] || {}).merge(mapped[:preferences] || {})
+          end
+        end
+
+        # Check if default_value contains a Sertifi/SFLD tag pattern
+        # If so, remap the field using the tag content instead of skipping it
+        if field_properties[:default_value].present? && !sertifi_name_mapping
+          tag_match = field_properties[:default_value].to_s.match(PdfFieldParser::SERTIFI_TAG_REGEX)
+          if tag_match
+            tag_content = tag_match[1]
+            mapping = PdfFieldParser::SERTIFI_TAG_MAPPINGS.find { |pattern, _| tag_content.match?(pattern) }
+            if mapping
+              mapped = mapping[1]
+              attrs = PdfFieldParser.parse_sertifi_attributes(tag_content)
+              field_properties[:name] = mapped[:name] if mapped[:name].present?
+              field_properties[:type] = mapped[:type] if mapped[:type].present?
+              field_properties[:default_value] = nil
+              field_properties[:preferences] = (field_properties[:preferences] || {}).merge(mapped[:preferences] || {})
+            else
+              next # Skip fields with non-SFLD default values
+            end
+          else
+            next # Skip fields with non-tag default values
+          end
+        end
 
         if field_properties[:type].in?(%w[radio multiple])
           if areas.size != field_properties[:options].size
@@ -125,7 +181,18 @@ module Templates
     end
 
     def build_field_properties(field)
-      field_name = field.full_field_name if field.full_field_name.to_s.match?(FIELD_NAME_REGEXP)
+      raw_field_name = field.full_field_name.to_s
+      field_name = raw_field_name if raw_field_name.match?(FIELD_NAME_REGEXP)
+
+      # Also accept field names that contain Sertifi/SFLD tag patterns (with brackets)
+      if field_name.nil? && raw_field_name.match?(PdfFieldParser::SERTIFI_TAG_REGEX)
+        field_name = raw_field_name
+      end
+
+      # Also accept Sertifi-style field names like "SertifiDate_1", "SertifiSStamp_1"
+      if field_name.nil? && raw_field_name.match?(/\ASertifi/i)
+        field_name = raw_field_name
+      end
 
       field_name = field_name&.encode('utf-8', invalid: :replace, undef: :replace, replace: '')
 
