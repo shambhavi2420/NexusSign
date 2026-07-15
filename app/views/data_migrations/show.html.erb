@@ -45,6 +45,19 @@
       <% end %>
     </div>
 
+    <% if session[:data_migration_job_session_id].present? %>
+      <div class="card bg-base-200 shadow-xl p-6 mb-6">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="loading loading-spinner loading-md text-primary"></span>
+          <h2 class="text-lg font-semibold">Processing in Background</h2>
+        </div>
+        <p class="text-sm text-base-content/70 mb-4">
+          Your files are being processed in the background. This may take a few minutes for large batches.
+        </p>
+        <%= link_to 'Check Status', status_data_migration_path, class: 'btn btn-outline btn-sm' %>
+      </div>
+    <% end %>
+
     <% if session[:data_migration_results].present? %>
       <% parsed_data = JSON.parse(session[:data_migration_results]) %>
       <% if parsed_data.is_a?(Array) %>

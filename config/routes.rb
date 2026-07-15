@@ -61,6 +61,7 @@ Rails.application.routes.draw do
       resources :clone, only: %i[create], controller: 'templates_clone'
       resources :submissions, only: %i[index create]
     end
+    resources :envelopes, only: %i[create show index destroy]
     resources :tools, only: %i[] do
       post :merge, on: :collection
       post :verify, on: :collection
@@ -92,6 +93,10 @@ Rails.application.routes.draw do
     resources :unarchive, only: %i[create], controller: 'submissions_unarchive'
     resources :events, only: %i[index], controller: 'submission_events'
   end
+  resources :envelopes, only: %i[index new create show destroy] do
+    resources :resend, only: %i[create], controller: 'envelopes_resend'
+    resources :void, only: %i[create], controller: 'envelopes_void'
+  end
   resources :submitters, only: %i[edit update]
   resources :console_redirect, only: %i[index]
   resources :upgrade, only: %i[index], controller: 'console_redirect'
@@ -109,6 +114,7 @@ Rails.application.routes.draw do
   end
   resource :data_migration, only: %i[show create] do
     get :export, on: :collection
+    get :status, on: :collection
   end
   resources :templates_archived, only: %i[index], path: 'templates/archived'
   resources :folders, only: %i[show edit update destroy], controller: 'template_folders' do

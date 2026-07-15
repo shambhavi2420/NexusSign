@@ -7,6 +7,8 @@ class DataMigrationsController < ApplicationController
 
   def show; end
 
+  SYNC_FILE_LIMIT = 5
+
   def create
     files = params[:files]
 
@@ -18,21 +20,66 @@ class DataMigrationsController < ApplicationController
     folder_name = params[:folder_name].presence
     folder = TemplateFolders.find_or_create_by_name(current_user, folder_name)
 
-    results = DataMigrations::BulkCreateTemplates.call(
-      files:,
-      folder:,
-      author: current_user,
-      account: current_account
-    )
+    if files.size <= SYNC_FILE_LIMIT
+      # Small batch: process synchronously (fast enough to stay within timeout)
+      results = DataMigrations::BulkCreateTemplates.call(
+        files:,
+        folder:,
+        author: current_user,
+        account: current_account
+      )
 
-    session[:data_migration_results] = {
-      results: results,
-      completed_at: Time.current.iso8601
-    }.to_json
+      session[:data_migration_results] = {
+        results: results,
+        completed_at: Time.current.iso8601
+      }.to_json
 
-    redirect_to data_migration_path, notice: I18n.t('bulk_upload_completed',
-                                                     success: results.count { |r| r[:status] == 'success' },
-                                                     failed: results.count { |r| r[:status] == 'failed' })
+      redirect_to data_migration_path, notice: I18n.t('bulk_upload_completed',
+                                                       success: results.count { |r| r[:status] == 'success' },
+                                                       failed: results.count { |r| r[:status] == 'failed' })
+    else
+      # Large batch: upload blobs immediately, process in background
+      blob_ids = files.map do |file|
+        blob = ActiveStorage::Blob.create_and_upload!(
+          io: file.tempfile,
+          filename: file.original_filename,
+          content_type: file.content_type
+        )
+        blob.id
+      end
+
+      session_id = session.id.to_s.presence || SecureRandom.hex(16)
+
+      BulkCreateTemplatesJob.perform_later(
+        blob_ids: blob_ids,
+        folder_id: folder&.id,
+        author_id: current_user.id,
+        account_id: current_account.id,
+        session_id: session_id
+      )
+
+      session[:data_migration_job_session_id] = session_id
+
+      redirect_to data_migration_path, notice: I18n.t('bulk_upload_queued',
+                                                       default: "#{files.size} files queued for processing. Results will appear shortly — refresh this page in a minute.")
+    end
+  end
+
+  def status
+    session_id = session[:data_migration_job_session_id]
+    cache_key = "data_migration_results:#{current_user.id}:#{session_id}"
+    cached = Rails.cache.read(cache_key)
+
+    if cached.present?
+      session[:data_migration_results] = cached
+      session.delete(:data_migration_job_session_id)
+      Rails.cache.delete(cache_key)
+      redirect_to data_migration_path, notice: I18n.t('bulk_upload_completed_background',
+                                                       default: 'Background processing completed. See results below.')
+    else
+      redirect_to data_migration_path, notice: I18n.t('bulk_upload_still_processing',
+                                                       default: 'Still processing... please refresh again in a moment.')
+    end
   end
 
   def export
