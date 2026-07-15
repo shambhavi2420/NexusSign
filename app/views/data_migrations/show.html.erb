@@ -45,7 +45,7 @@
       <% end %>
     </div>
 
-    <% if session[:data_migration_job_session_id].present? %>
+    <% if session[:data_migration_job_session_id].present? && @bg_results_json.blank? %>
       <div class="card bg-base-200 shadow-xl p-6 mb-6">
         <div class="flex items-center gap-3 mb-2">
           <span class="loading loading-spinner loading-md text-primary"></span>
@@ -58,8 +58,9 @@
       </div>
     <% end %>
 
-    <% if session[:data_migration_results].present? %>
-      <% parsed_data = JSON.parse(session[:data_migration_results]) %>
+    <% results_json = @bg_results_json || session[:data_migration_results] %>
+    <% if results_json.present? %>
+      <% parsed_data = JSON.parse(results_json) %>
       <% if parsed_data.is_a?(Array) %>
         <% results = parsed_data %>
         <% completed_at = nil %>

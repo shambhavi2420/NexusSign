@@ -5,7 +5,19 @@ class DataMigrationsController < ApplicationController
 
   before_action :authorize_admin!
 
-  def show; end
+  def show
+    # If a background job has completed, load results from cache (not session, to avoid cookie overflow)
+    if session[:data_migration_job_session_id].present?
+      cache_key = "data_migration_results:#{current_user.id}:#{session[:data_migration_job_session_id]}"
+      cached = Rails.cache.read(cache_key)
+
+      if cached.present?
+        @bg_results_json = cached
+        session.delete(:data_migration_job_session_id)
+        Rails.cache.delete(cache_key)
+      end
+    end
+  end
 
   SYNC_FILE_LIMIT = 5
 
@@ -29,10 +41,16 @@ class DataMigrationsController < ApplicationController
         account: current_account
       )
 
-      session[:data_migration_results] = {
+      # Store in cache instead of session to avoid CookieOverflow for large results
+      sync_session_id = SecureRandom.hex(16)
+      cache_key = "data_migration_results:#{current_user.id}:#{sync_session_id}"
+      Rails.cache.write(cache_key, {
         results: results,
-        completed_at: Time.current.iso8601
-      }.to_json
+        completed_at: Time.current.iso8601,
+        status: 'completed'
+      }.to_json, expires_in: 1.hour)
+
+      session[:data_migration_job_session_id] = sync_session_id
 
       redirect_to data_migration_path, notice: I18n.t('bulk_upload_completed',
                                                        success: results.count { |r| r[:status] == 'success' },
@@ -71,9 +89,7 @@ class DataMigrationsController < ApplicationController
     cached = Rails.cache.read(cache_key)
 
     if cached.present?
-      session[:data_migration_results] = cached
-      session.delete(:data_migration_job_session_id)
-      Rails.cache.delete(cache_key)
+      # Don't store in session (too large for cookie). The show action reads from cache directly.
       redirect_to data_migration_path, notice: I18n.t('bulk_upload_completed_background',
                                                        default: 'Background processing completed. See results below.')
     else
@@ -83,14 +99,22 @@ class DataMigrationsController < ApplicationController
   end
 
   def export
-    results = session[:data_migration_results]
+    # Try cache first (background/new flow), fall back to session (legacy)
+    results_json = nil
 
-    if results.blank?
+    if session[:data_migration_job_session_id].present?
+      cache_key = "data_migration_results:#{current_user.id}:#{session[:data_migration_job_session_id]}"
+      results_json = Rails.cache.read(cache_key)
+    end
+
+    results_json ||= session[:data_migration_results]
+
+    if results_json.blank?
       redirect_to data_migration_path, alert: I18n.t('no_results_to_export')
       return
     end
 
-    parsed_data = JSON.parse(results)
+    parsed_data = JSON.parse(results_json)
     parsed_results = if parsed_data.is_a?(Array)
                        parsed_data
                      else
