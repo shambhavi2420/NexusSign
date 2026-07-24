@@ -11,7 +11,7 @@
     :with-label="!isAnonymousChecboxes && showFieldNames"
     :current-step="currentStepFields"
     :scroll-padding="scrollPadding"
-    @focus-step="[saveStep(), currentField.type !== 'checkbox' ? isFormVisible = true : '', goToStep($event, false, true)]"
+    @focus-step="[saveStep()?.catch?.(() => {}), currentField.type !== 'checkbox' ? isFormVisible = true : '', goToStep($event, false, true)]"
   />
   <FieldAreas
     :steps="readonlyConditionalFields.map((e) => [e])"
@@ -117,6 +117,7 @@
         v-if="!isCompleted && !isInvite"
         id="steps_form"
         ref="form"
+        novalidate
         :action="submitPath"
         method="post"
         class="mx-auto steps-form"
@@ -542,7 +543,7 @@
             href="#"
             class="inline border border-base-300 h-3 w-3 rounded-full mx-1 mt-1"
             :class="{ 'bg-base-300 steps-progress-current': index === currentStep, 'bg-base-content': (index < currentStep && stepFields[index].every((f) => !f.required || ![null, undefined, ''].includes(values[f.uuid]))) || isCompleted, 'bg-white': index > currentStep }"
-            @click.prevent="isCompleted ? '' : [saveStep(), goToStep(index, true)]"
+            @click.prevent="isCompleted ? '' : [saveStep()?.catch?.(() => {}), goToStep(index, true)]"
           />
         </div>
       </div>
@@ -659,7 +660,7 @@ export default {
     orderAsOnPage: {
       type: Boolean,
       required: false,
-      default: false
+      default: true
     },
     requireSigningReason: {
       type: Boolean,
@@ -917,6 +918,9 @@ export default {
         } else {
           return this.t('complete')
         }
+      } else if (!this.emptyValueRequiredStep) {
+        // All mandatory fields are filled — show Complete even if optional fields remain
+        return this.t('complete')
       } else {
         return this.t('next')
       }
@@ -1392,22 +1396,77 @@ export default {
         : () => Promise.resolve({})
 
       stepPromise().then(async () => {
-        const emptyRequiredField = this.stepFields.find((fields, index) => {
-          if (forceComplete ? index === submitStep : index >= submitStep) {
-            return false
-          }
+        const isLastStep = (submitStep === this.stepFields.length - 1) || forceComplete || !this.emptyValueRequiredStep
 
-          return fields.some((f) => {
-            return f.required && (f.type === 'phone' || !this.allowToSkip) && isEmpty(this.submittedValues[f.uuid])
+        // Only validate mandatory fields when user explicitly clicks Complete
+        const emptyRequiredField = forceComplete
+          ? this.stepFields.find((fields, index) => {
+            if (index === submitStep) {
+              return false
+            }
+
+            return fields.some((f) => {
+              return f.required && (f.type === 'phone' || !this.allowToSkip) && isEmpty(this.submittedValues[f.uuid])
+            })
           })
-        })
+          : null
+
+        // If all mandatory fields are filled and we're not on the actual last step,
+        // ask about optional fields BEFORE sending to server
+        let shouldComplete = isLastStep && !emptyRequiredField
+        let skipToOptionalStep = null
+
+        if (shouldComplete && !forceComplete && submitStep !== this.stepFields.length - 1) {
+          const hasEmptyOptional = this.stepFields.some((fields) => {
+            return fields.some((f) => !f.required && isEmpty(this.values[f.uuid]))
+          })
+
+          if (hasEmptyOptional) {
+            const skipOptional = confirm(this.t('optional_fields_empty_confirm') || 'Some optional fields are empty. Do you want to skip them and complete the form?')
+            if (!skipOptional) {
+              // User wants to fill optional fields — don't complete, navigate to first empty optional
+              shouldComplete = false
+              // Search from current position forward first, then wrap around
+              skipToOptionalStep = this.stepFields.slice(submitStep + 1).find((fields) => {
+                return fields.some((f) => !f.required && isEmpty(this.values[f.uuid]))
+              })
+              if (!skipToOptionalStep) {
+                skipToOptionalStep = this.stepFields.find((fields) => {
+                  return fields.some((f) => !f.required && isEmpty(this.values[f.uuid]))
+                })
+              }
+            }
+          }
+        }
+
+        // If user chose to fill optional fields, navigate there without saving as complete
+        if (skipToOptionalStep) {
+          this.goToStep(this.stepFields.indexOf(skipToOptionalStep), this.autoscrollFields)
+          this.isSubmitting = false
+          this.isSubmittingComplete = false
+          return
+        }
 
         const formData = new FormData(this.$refs.form)
-        const isLastStep = (submitStep === this.stepFields.length - 1) || forceComplete
 
-        if (isLastStep && !emptyRequiredField && !this.inviteSubmitters.length && !this.optionalInviteSubmitters.length) {
+        if (shouldComplete && !this.inviteSubmitters.length && !this.optionalInviteSubmitters.length) {
           formData.append('completed', 'true')
           formData.append('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone)
+
+          // When completing, include ALL field values so server has everything
+          // (some values may only exist client-side if user navigated via field areas)
+          this.stepFields.forEach((fields) => {
+            fields.forEach((f) => {
+              if (!isEmpty(this.values[f.uuid]) && !formData.has(`values[${f.uuid}]`)) {
+                const val = this.values[f.uuid]
+                if (Array.isArray(val)) {
+                  val.forEach((v) => formData.append(`values[${f.uuid}][]`, v))
+                } else {
+                  formData.append(`values[${f.uuid}]`, val)
+                }
+              }
+            })
+          })
         }
 
         let saveStepRequest
@@ -1447,7 +1506,13 @@ export default {
             return Promise.reject(new Error(data.error))
           }
 
-          const nextStep = (isLastStep && emptyRequiredField) || (forceComplete ? null : this.stepFields[submitStep + 1])
+          let nextStep = null
+          if (isLastStep && emptyRequiredField) {
+            nextStep = emptyRequiredField
+          } else if (!isLastStep) {
+            // Still have required fields to fill — go to next step sequentially
+            nextStep = this.stepFields[submitStep + 1] || null
+          }
 
           if (nextStep) {
             if (this.alwaysMinimize) {

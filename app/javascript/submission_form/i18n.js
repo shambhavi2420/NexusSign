@@ -91,6 +91,7 @@ const en = {
   type_text: 'Type text',
   email_has_been_sent: 'Email has been sent',
   processing: 'Processing',
+  optional_fields_empty_confirm: 'Some optional fields are empty. Do you want to skip them and complete the form?',
   pay_with_stripe: 'Pay with Stripe',
   reupload: 'Reupload',
   upload: 'Upload',

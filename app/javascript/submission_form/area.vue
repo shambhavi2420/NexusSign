@@ -3,8 +3,16 @@
     class="flex absolute lg:text-base -outline-offset-1 field-area"
     dir="auto"
     :style="[computedStyle, fontStyle]"
-    :class="{ 'cursor-default': !submittable, 'border border-red-100 bg-red-100 cursor-pointer': submittable, 'border border-red-100': !isActive && submittable, 'bg-opacity-80': !isActive && !isValueSet && submittable, 'outline-red-500 outline-dashed outline-2 z-10 field-area-active': isActive && submittable, 'bg-opacity-40': (isActive || isValueSet) && submittable }"
+    :class="fieldAreaClasses"
   >
+    <span
+      v-if="field.required && !hasFieldValue && submittable && !isActive"
+      class="absolute left-0 top-0 bottom-0 w-1 bg-red-500 rounded-l pointer-events-none z-20"
+    ></span>
+    <span
+      v-else-if="hasFieldValue && submittable && !isActive"
+      class="absolute left-0 top-0 bottom-0 w-1 bg-green-500 rounded-l pointer-events-none z-20"
+    ></span>
     <div
       v-if="(!withFieldPlaceholder || !field.name || field.type === 'cells') && !isActive && !isValueSet && field.type !== 'checkbox' && submittable && !area.option_uuid"
       class="absolute top-0 bottom-0 right-0 left-0 items-center justify-center h-full w-full"
@@ -374,6 +382,36 @@ export default {
     }
   },
   computed: {
+    fieldAreaClasses () {
+      if (!this.submittable) {
+        return { 'cursor-default': true }
+      }
+
+      const isRequiredEmpty = this.field.required && !this.hasFieldValue
+      const classes = {
+        'cursor-pointer': true,
+        // Background: red for unfilled required, light green for filled, subtle pink for optional empty
+        'bg-red-100': isRequiredEmpty,
+        'bg-green-50': this.hasFieldValue && !this.isActive,
+        'bg-red-50': !this.field.required && !this.hasFieldValue && !this.isActive,
+        'bg-opacity-80': !this.isActive && !this.hasFieldValue,
+        'bg-opacity-60': this.hasFieldValue && !this.isActive,
+        'bg-opacity-40': this.isActive,
+        // Active field: red dashed outline
+        'outline-red-500 outline-dashed outline-2 z-10 field-area-active': this.isActive,
+        // Required + empty: stronger red border
+        'border-2 border-red-300': isRequiredEmpty && !this.isActive,
+        // Filled: green border
+        'border border-green-200': this.hasFieldValue && !this.isActive,
+        // Optional empty: subtle border
+        'border border-red-100': !this.field.required && !this.hasFieldValue && !this.isActive
+      }
+
+      return classes
+    },
+    hasFieldValue () {
+      return this.modelValue != null && this.modelValue !== '' && this.modelValue !== false && (!Array.isArray(this.modelValue) || this.modelValue.length > 0)
+    },
     fieldNames () {
       return {
         text: this.t('text'),

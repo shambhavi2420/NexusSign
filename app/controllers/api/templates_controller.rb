@@ -5,9 +5,10 @@ module Api
     load_and_authorize_resource :template
 
     def index
-      templates = filter_templates(@templates, params)
+      filtered_templates = filter_templates(@templates, params)
+      total_count = filtered_templates.count
 
-      templates = paginate(templates.preload(:author, folder: :parent_folder))
+      templates = paginate(filtered_templates.preload(:author, folder: :parent_folder))
 
       schema_documents =
         ActiveStorage::Attachment.where(record_id: templates.map(&:id),
@@ -35,6 +36,7 @@ module Api
         end,
         pagination: {
           count: templates.size,
+          total_count: total_count,
           next: templates.last&.id,
           prev: templates.first&.id
         }
