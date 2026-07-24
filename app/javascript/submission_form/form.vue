@@ -11,6 +11,7 @@
     :with-label="!isAnonymousChecboxes && showFieldNames"
     :current-step="currentStepFields"
     :scroll-padding="scrollPadding"
+    :next-required-field-uuid="nextRequiredFieldUuid"
     @focus-step="[saveStep()?.catch?.(() => {}), currentField.type !== 'checkbox' ? isFormVisible = true : '', goToStep($event, false, true)]"
   />
   <FieldAreas
@@ -134,6 +135,29 @@
           name="_method"
           type="hidden"
         >
+        <div
+          v-if="remainingRequiredCount > 0"
+          class="flex justify-center mb-2"
+        >
+          <a
+            href="#"
+            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors required-fields-pill"
+            @click.prevent="goToNextRequired"
+          >
+            <span class="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            {{ remainingRequiredCount }} {{ t('required_remaining') || 'required remaining' }}
+            <span class="text-red-400">&rarr;</span>
+          </a>
+        </div>
+        <div
+          v-else-if="!isCompleted"
+          class="flex justify-center mb-2"
+        >
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+            <span class="inline-block w-2 h-2 rounded-full bg-green-500" />
+            {{ t('all_required_complete') || 'All required fields complete' }}
+          </span>
+        </div>
         <div class="md:mt-4">
           <div v-if="['cells', 'text', 'signerfirstname', 'signerlastname', 'signerfullname', 'companyname', 'jobid', 'month', 'signerprimaryphone', 'candidatepermanentaddress1', 'candidatepermanentcity', 'candidatepermanentstate', 'candidatepermanentzip', 'recruiter', 'recruiterphone', 'recruiteremail', 'candidatessn', 'clientname', 'recruitertitle', 'signeremail', 'candidateprimaryprofession', 'candidateprimaryspecialty', 'additionalinformationforexhibitandrider', 'salesrepresentative', 'workauthorization'].includes(currentField.type)">
             <TextStep
@@ -909,6 +933,22 @@ export default {
         })
       })
     },
+    nextRequiredFieldUuid () {
+      for (let i = this.currentStep + 1; i < this.stepFields.length; i++) {
+        const field = this.stepFields[i].find((f) => f.required && isEmpty(this.values[f.uuid]))
+        if (field) return field.uuid
+      }
+      for (let i = 0; i <= this.currentStep; i++) {
+        const field = this.stepFields[i].find((f) => f.required && isEmpty(this.values[f.uuid]))
+        if (field) return field.uuid
+      }
+      return ''
+    },
+    remainingRequiredCount () {
+      return this.stepFields.reduce((count, fields) => {
+        return count + fields.filter((f) => f.required && isEmpty(this.values[f.uuid])).length
+      }, 0)
+    },
     submitButtonText () {
       if (this.alwaysMinimize) {
         return this.t('submit')
@@ -1313,6 +1353,25 @@ export default {
         return null
       }
     },
+    goToNextRequired () {
+      if (this.nextRequiredFieldUuid) {
+        const stepIndex = this.stepFields.findIndex((fields) =>
+          fields.some((f) => f.uuid === this.nextRequiredFieldUuid)
+        )
+        if (stepIndex !== -1) {
+          if (this.$refs.form) {
+            const formData = new FormData(this.$refs.form)
+            this.saveStep(formData)?.then?.(() => {
+              this.goToStep(stepIndex, true)
+            }).catch?.(() => {
+              this.goToStep(stepIndex, true)
+            })
+          } else {
+            this.goToStep(stepIndex, true)
+          }
+        }
+      }
+    },
     goToStep (stepIndex, scrollToArea = false, clickUpload = false) {
       this.currentStep = stepIndex
       this.showFillAllRequiredFields = false
@@ -1412,40 +1471,8 @@ export default {
           : null
 
         // If all mandatory fields are filled and we're not on the actual last step,
-        // ask about optional fields BEFORE sending to server
+        // just complete without asking about optional fields
         let shouldComplete = isLastStep && !emptyRequiredField
-        let skipToOptionalStep = null
-
-        if (shouldComplete && !forceComplete && submitStep !== this.stepFields.length - 1) {
-          const hasEmptyOptional = this.stepFields.some((fields) => {
-            return fields.some((f) => !f.required && isEmpty(this.values[f.uuid]))
-          })
-
-          if (hasEmptyOptional) {
-            const skipOptional = confirm(this.t('optional_fields_empty_confirm') || 'Some optional fields are empty. Do you want to skip them and complete the form?')
-            if (!skipOptional) {
-              // User wants to fill optional fields — don't complete, navigate to first empty optional
-              shouldComplete = false
-              // Search from current position forward first, then wrap around
-              skipToOptionalStep = this.stepFields.slice(submitStep + 1).find((fields) => {
-                return fields.some((f) => !f.required && isEmpty(this.values[f.uuid]))
-              })
-              if (!skipToOptionalStep) {
-                skipToOptionalStep = this.stepFields.find((fields) => {
-                  return fields.some((f) => !f.required && isEmpty(this.values[f.uuid]))
-                })
-              }
-            }
-          }
-        }
-
-        // If user chose to fill optional fields, navigate there without saving as complete
-        if (skipToOptionalStep) {
-          this.goToStep(this.stepFields.indexOf(skipToOptionalStep), this.autoscrollFields)
-          this.isSubmitting = false
-          this.isSubmittingComplete = false
-          return
-        }
 
         const formData = new FormData(this.$refs.form)
 

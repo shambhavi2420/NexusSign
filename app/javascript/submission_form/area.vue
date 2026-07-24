@@ -365,6 +365,11 @@ export default {
       required: false,
       default: 0
     },
+    isNextRequired: {
+      type: Boolean,
+      required: false,
+      default: false
+    },
     attachmentsIndex: {
       type: Object,
       required: false,
@@ -397,14 +402,18 @@ export default {
         'bg-opacity-80': !this.isActive && !this.hasFieldValue,
         'bg-opacity-60': this.hasFieldValue && !this.isActive,
         'bg-opacity-40': this.isActive,
-        // Active field: red dashed outline
-        'outline-red-500 outline-dashed outline-2 z-10 field-area-active': this.isActive,
+        // Active field: green solid outline
+        'outline-green-500 outline-solid outline-2 z-10 field-area-active': this.isActive,
         // Required + empty: stronger red border
         'border-2 border-red-300': isRequiredEmpty && !this.isActive,
         // Filled: green border
         'border border-green-200': this.hasFieldValue && !this.isActive,
         // Optional empty: subtle border
-        'border border-red-100': !this.field.required && !this.hasFieldValue && !this.isActive
+        'border border-red-100': !this.field.required && !this.hasFieldValue && !this.isActive,
+        // Subtle indicator on the next required unfilled field
+        'field-area-pulse': this.isNextRequired && !this.isActive && !this.hasFieldValue,
+        // Active field: green glow to clearly show which field is being filled
+        'field-area-active-glow': this.isActive
       }
 
       return classes
@@ -762,3 +771,31 @@ formattedDate () {
   }
 }
 </script>
+
+<style>
+@keyframes field-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 6px 3px rgba(239, 68, 68, 0.5);
+  }
+}
+
+@keyframes field-active-glow {
+  0%, 100% {
+    box-shadow: 0 0 4px 2px rgba(34, 197, 94, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 8px 4px rgba(34, 197, 94, 0.4);
+  }
+}
+
+.field-area-pulse {
+  animation: field-pulse 1.5s ease-in-out infinite;
+}
+
+.field-area-active-glow {
+  animation: field-active-glow 1.5s ease-in-out infinite;
+}
+</style>

@@ -37,6 +37,7 @@
               :is-active="currentStep === step"
               :with-label="withLabel && !withFieldPlaceholder && step.length < 2"
               :is-value-set="step.some((f) => f.uuid in values)"
+              :is-next-required="field.uuid === nextRequiredFieldUuid"
               :attachments-index="attachmentsIndex"
               @click="[$emit('focus-step', stepIndex), maybeScrollOnClick(field, area)]"
             />
@@ -109,6 +110,11 @@ export default {
       type: Array,
       required: false,
       default: () => []
+    },
+    nextRequiredFieldUuid: {
+      type: String,
+      required: false,
+      default: ''
     }
   },
   emits: ['focus-step'],
