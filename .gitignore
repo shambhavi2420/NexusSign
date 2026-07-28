@@ -3,3 +3,4 @@ docuseal/
 .env
 *.rdb
 *.rdb
+docuseal/dump.rdb
