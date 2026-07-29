@@ -8,7 +8,13 @@ module Api
       filtered_templates = filter_templates(@templates, params)
       total_count = filtered_templates.count
 
-      templates = paginate(filtered_templates.preload(:author, folder: :parent_folder))
+      limit = [params.fetch(:limit, DEFAULT_LIMIT).to_i, MAX_LIMIT].min
+      offset = params[:after].present? ? params[:after].to_i : 0
+
+      templates = filtered_templates.preload(:author, folder: :parent_folder)
+                                    .order(name: :asc, id: :asc)
+                                    .offset(offset)
+                                    .limit(limit)
 
       schema_documents =
         ActiveStorage::Attachment.where(record_id: templates.map(&:id),
@@ -27,6 +33,9 @@ module Api
 
       expires_at = Accounts.link_expires_at(current_account)
 
+      next_offset = offset + templates.size
+      prev_offset = [offset - limit, 0].max
+
       render json: {
         data: templates.map do |t|
           Templates::SerializeForApi.call(t,
@@ -37,8 +46,8 @@ module Api
         pagination: {
           count: templates.size,
           total_count: total_count,
-          next: templates.last&.id,
-          prev: templates.first&.id
+          next: next_offset,
+          prev: prev_offset
         }
       }
     end
