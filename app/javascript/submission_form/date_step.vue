@@ -48,7 +48,7 @@
         ref="input"
         v-model="value"
         :min="validationMin"
-        :max="validationMax"
+        :max="validationMax || '9999-12-31'"
         class="base-input !text-2xl text-center w-full"
         :required="field.required"
         type="date"
@@ -144,6 +144,17 @@ value: {
   }
 },
   },
+  mounted () {
+    this.$nextTick(() => {
+      if (this.modelValue && this.$refs.input) {
+        const isoDate = this.toIsoDate(this.modelValue)
+
+        if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+          this.$refs.input.value = isoDate
+        }
+      }
+    })
+  },
   methods: {
     onEnter (e) {
       if (this.modelValue) {
@@ -173,9 +184,23 @@ value: {
     },
 toIsoDate (value) {
   if (!value) return value
+  value = String(value).trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  const match = value.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/)
-  if (match) return `${match[3]}-${match[1]}-${match[2]}`
+  // Handle M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (1 or 2 digit month/day)
+  const match = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+  if (match) {
+    const mm = match[1].padStart(2, '0')
+    const dd = match[2].padStart(2, '0')
+    return `${match[3]}-${mm}-${dd}`
+  }
+  // Fallback: try parsing as a date
+  const parsed = new Date(value)
+  if (!isNaN(parsed)) {
+    const yyyy = parsed.getFullYear()
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0')
+    const dd = String(parsed.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  }
   return value
 },
     setCurrentDate () {
