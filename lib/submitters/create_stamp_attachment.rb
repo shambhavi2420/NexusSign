@@ -37,29 +37,12 @@ module Submitters
     end
 
     def generate_stamp_image(submitter, with_logo: true)
-      logo =
-        if with_logo
-          Vips::Image.new_from_buffer(load_logo(submitter).read, '')
-        else
-          Vips::Image.new_from_buffer(TRANSPARENT_PIXEL, '').resize(WIDTH)
-        end
-
-      logo = logo.resize([WIDTH / logo.width.to_f, HEIGHT / logo.height.to_f].min)
-
       base_layer = Vips::Image.black(WIDTH, HEIGHT).new_from_image([255, 255, 255]).copy(interpretation: :srgb)
-
-      opacity_layer = Vips::Image.new_from_buffer(TRANSPARENT_PIXEL, '').resize(WIDTH)
 
       text = build_text_image(submitter)
 
       text_layer = text.new_from_image([0, 0, 0]).copy(interpretation: :srgb)
       text_layer = text_layer.bandjoin(text)
-
-      base_layer = base_layer.composite(logo, 'over',
-                                        x: (WIDTH - logo.width) / 2,
-                                        y: (HEIGHT - logo.height) / 2)
-
-      base_layer = base_layer.composite(opacity_layer, 'over')
 
       base_layer.composite(text_layer, 'over',
                            x: (WIDTH - text_layer.width) / 2,
