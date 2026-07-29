@@ -55,6 +55,8 @@ module Submissions
       'Courier' => 1.6
     }.freeze
 
+    DATE_FIELD_TYPES = %w[date candidateavailablefrom candidateavailablefromdate startdate enddate].freeze
+
     PDFA_FONT_MAP = {
       FONT_NAME => PDFA_FONT_VARIANS,
       'Helvetica' => PDFA_FONT_VARIANS,
@@ -606,7 +608,7 @@ module Submissions
               end
             end
           else
-            if field['type'] == 'date'
+            if field['type'].in?(DATE_FIELD_TYPES)
               value = TimeUtils.format_date_string(value, field.dig('preferences', 'format'), locale)
             end
 
@@ -632,7 +634,7 @@ module Submissions
 
               text = HexaPDF::Layout::TextFragment.create(value, **text_params)
 
-              lines = layouter.fit([text], field['type'].in?(%w[date number]) ? width : area['w'] * width, height).lines
+              lines = layouter.fit([text], field['type'].in?(DATE_FIELD_TYPES + %w[number]) ? width : area['w'] * width, height).lines
 
               box_height = lines.sum(&:height)
             end
@@ -643,7 +645,7 @@ module Submissions
 
               text = HexaPDF::Layout::TextFragment.create(value, **text_params)
 
-              lines = layouter.fit([text], field['type'].in?(%w[date number]) ? width : area['w'] * width, height).lines
+              lines = layouter.fit([text], field['type'].in?(DATE_FIELD_TYPES + %w[number]) ? width : area['w'] * width, height).lines
 
               box_height = lines.sum(&:height)
             end
@@ -651,7 +653,7 @@ module Submissions
             height_diff = [0, box_height - (area['h'] * height)].max
 
             right_align_x_adjustment =
-              if field['type'].in?(%w[date number]) && text_align != :left
+              if field['type'].in?(DATE_FIELD_TYPES + %w[number]) && text_align != :left
                 (width - (area['w'] * width)) / (text_align == :center ? 2.0 : 1)
               else
                 0
@@ -666,7 +668,7 @@ module Submissions
                 height_diff / 2
               end
 
-            layouter.fit([text], field['type'].in?(%w[date number]) ? width : area['w'] * width,
+            layouter.fit([text], field['type'].in?(DATE_FIELD_TYPES + %w[number]) ? width : area['w'] * width,
                          height_diff.positive? ? box_height : area['h'] * height)
                     .draw(canvas, (area['x'] * width) - right_align_x_adjustment + TEXT_LEFT_MARGIN,
                           height - (area['y'] * height) + align_y_diff - TEXT_TOP_MARGIN)

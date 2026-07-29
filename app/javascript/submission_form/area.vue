@@ -216,7 +216,7 @@
         {{ modelValue.join(', ') }}
       </span>
       <span
-        v-else-if="field.type === 'date'"
+        v-else-if="['date', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate', 'signaturedate', 'currentdate'].includes(field.type)"
         :class="{ 'w-full': field.preferences?.align }"
       >
         {{ formattedDate }}
