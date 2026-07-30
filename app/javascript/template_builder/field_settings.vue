@@ -581,6 +581,7 @@
 
 <script>
 import { IconRouteAltLeft, IconTypography, IconShape, IconX, IconMathFunction, IconNewSection, IconInfoCircle, IconCopy } from '@tabler/icons-vue'
+import { formatDateString } from '../submission_form/date_utils'
 
 export default {
   name: 'FieldSettings',
@@ -767,33 +768,7 @@ export default {
       }
     },
     formatDate (date, format) {
-      const monthFormats = {
-        M: 'numeric',
-        MM: '2-digit',
-        MMM: 'short',
-        MMMM: 'long'
-      }
-
-      const dayFormats = {
-        D: 'numeric',
-        DD: '2-digit'
-      }
-
-      const yearFormats = {
-        YYYY: 'numeric',
-        YY: '2-digit'
-      }
-
-      const parts = new Intl.DateTimeFormat([], {
-        day: dayFormats[format.match(/D+/)],
-        month: monthFormats[format.match(/M+/)],
-        year: yearFormats[format.match(/Y+/)]
-      }).formatToParts(date)
-
-      return format
-        .replace(/D+/, parts.find((p) => p.type === 'day').value)
-        .replace(/M+/, parts.find((p) => p.type === 'month').value)
-        .replace(/Y+/, parts.find((p) => p.type === 'year').value)
+      return formatDateString(date, format)
     }
   }
 }
