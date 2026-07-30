@@ -768,10 +768,14 @@ formattedDate () {
         YY: '2-digit'
       }
 
+      const dayToken = (format.match(/D+/) || [])[0] || 'DD'
+      const monthToken = (format.match(/M+/) || [])[0] || 'MM'
+      const yearToken = (format.match(/Y+/) || [])[0] || 'YYYY'
+
       const parts = new Intl.DateTimeFormat([], {
-        day: dayFormats[format.match(/D+/)],
-        month: monthFormats[format.match(/M+/)],
-        year: yearFormats[format.match(/Y+/)]
+        day: dayFormats[dayToken],
+        month: monthFormats[monthToken],
+        year: yearFormats[yearToken]
       }).formatToParts(date)
 
       return format
