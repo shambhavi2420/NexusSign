@@ -62,6 +62,11 @@ module Submitters
       [normalized_values, attachments]
     end
 
+    DATE_FIELD_TYPES = %w[
+      date candidateavailablefrom candidateavailablefromdate
+      startdate enddate signaturedate currentdate datewithmonthname
+    ].freeze
+
     def normalize_value(field, value)
       if field['type'] == 'checkbox'
         return true if TRUE_VALUES.include?(value)
@@ -74,7 +79,7 @@ module Submitters
         value.to_s
       elsif field['type'] == 'number'
         (value.to_f % 1).zero? ? value.to_i : value.to_f
-      elsif field['type'] == 'date' && value != '{{date}}'
+      elsif DATE_FIELD_TYPES.include?(field['type']) && value != '{{date}}'
         normalize_date(field, value)
       else
         value

@@ -177,7 +177,7 @@
             @focus="scrollIntoField(currentField)"
           />
           <DateStep
-            v-else-if="['date', 'signaturedate', 'currentdate', 'datewithmonthname', 'candidateavailablefrom', 'startdate', 'enddate'].includes(currentField.type)"
+            v-else-if="['date', 'signaturedate', 'currentdate', 'datewithmonthname', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate'].includes(currentField.type)"
             :key="currentField.uuid"
             v-model="values[currentField.uuid]"
             :show-field-names="showFieldNames"

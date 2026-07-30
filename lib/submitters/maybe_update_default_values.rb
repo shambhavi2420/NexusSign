@@ -191,6 +191,11 @@ module Submitters
 
       value ||= field['default_value']
 
+      # Normalize date values to YYYY-MM-DD to prevent timezone display issues
+      if DATE_FIELD_TYPES.include?(field_type_clean) && value.present? && value != '{{date}}'
+        value = normalize_date(value)
+      end
+
       puts "    → FINAL value for '#{field_type_clean}': #{value.inspect}"
       value
     end
@@ -201,13 +206,17 @@ module Submitters
       # Already YYYY-MM-DD, return as-is
       return value if value.match?(/^\d{4}-\d{2}-\d{2}$/)
 
-      # MM/DD/YYYY or MM-DD-YYYY → YYYY-MM-DD
-      if value.match?(/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/)
-        parts = value.scan(/\d+/)
-        return "#{parts[2]}-#{parts[0]}-#{parts[1]}"
+      # MM/DD/YYYY or MM-DD-YYYY (1 or 2 digit month/day) → YYYY-MM-DD
+      if (match = value.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/))
+        return "#{match[3]}-#{match[1].rjust(2, '0')}-#{match[2].rjust(2, '0')}"
       end
 
-      value
+      # Try Ruby Date.parse as fallback
+      begin
+        Date.parse(value).to_s
+      rescue Date::Error
+        value
+      end
     end
 
   end

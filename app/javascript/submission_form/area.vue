@@ -216,7 +216,7 @@
         {{ modelValue.join(', ') }}
       </span>
       <span
-        v-else-if="['date', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate', 'signaturedate', 'currentdate'].includes(field.type)"
+        v-else-if="['date', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate', 'signaturedate', 'currentdate', 'datewithmonthname'].includes(field.type)"
         :class="{ 'w-full': field.preferences?.align }"
       >
         {{ formattedDate }}
@@ -602,11 +602,12 @@ export default {
       return Intl.DateTimeFormat().resolvedOptions()?.locale
     },
 formattedDate () {
-  const DATE_FIELD_TYPES = ['date', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate', 'signaturedate', 'currentdate']
+  const DATE_FIELD_TYPES = ['date', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate', 'signaturedate', 'currentdate', 'datewithmonthname']
   if (DATE_FIELD_TYPES.includes(this.field.type) && this.modelValue) {
     try {
+      const date = this.modelValue === '{{date}}' ? new Date() : this.parseDateLocal(this.modelValue)
       return this.formatDate(
-        this.modelValue === '{{date}}' ? new Date() : new Date(this.modelValue),
+        date,
         this.field.preferences?.format || (this.locale.endsWith('-US') ? 'MM/DD/YYYY' : 'DD/MM/YYYY')
       )
     } catch {
@@ -722,6 +723,32 @@ formattedDate () {
         return number
       }
     },
+    parseDateLocal (value) {
+      // Parse a date string into a local-midnight Date object to avoid
+      // timezone shift issues with new Date() for date-only strings.
+      const str = String(value).trim()
+
+      // YYYY-MM-DD (ISO date-only — JS treats this as UTC, causing tz bugs)
+      let match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (match) {
+        return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]))
+      }
+
+      // MM/DD/YYYY or MM-DD-YYYY
+      match = str.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$/)
+      if (match) {
+        return new Date(parseInt(match[3]), parseInt(match[1]) - 1, parseInt(match[2]))
+      }
+
+      // DD.MM.YYYY
+      match = str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+      if (match) {
+        return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]))
+      }
+
+      // Fallback: let JS parse it (for datetime strings, etc.)
+      return new Date(value)
+    },
     formatDate (date, format) {
       const monthFormats = {
         M: 'numeric',
@@ -744,8 +771,7 @@ formattedDate () {
       const parts = new Intl.DateTimeFormat([], {
         day: dayFormats[format.match(/D+/)],
         month: monthFormats[format.match(/M+/)],
-        year: yearFormats[format.match(/Y+/)],
-        timeZone: 'UTC'
+        year: yearFormats[format.match(/Y+/)]
       }).formatToParts(date)
 
       return format
