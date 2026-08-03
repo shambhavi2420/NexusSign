@@ -64,6 +64,8 @@ en: &en
   please_check_the_copy_of_your_name_in_the_email_attachments: 'Please check the copy of your "%{name}" in the email attachments.'
   awaiting_completion_by_the_other_party: "Awaiting completion by the other party"
   signing_party: "Signing Party"
+  you: "You"
+  co_signer: "Co-Signer"
   review_and_sign: Review and Sign
   review_and_submit: Review and Submit
   please_contact_us_by_replying_to_this_email_if_you_have_any_questions: "Please contact us by replying to this email if you have any questions."
@@ -1064,6 +1066,8 @@ es: &es
   document_download_filename_format: Formato del nombre del archivo de descarga del documento
   awaiting_completion_by_the_other_party: "Esperando la finalización por la otra parte"
   signing_party: "Parte Firmante"
+  you: "Tú"
+  co_signer: "Co-Firmante"
   enforce_recipients_order: 'Hacer cumplir el orden de los destinatarios'
   first_party: 'Primera Parte'
   docuseal_trusted_signature: Firma de confianza DocuSeal

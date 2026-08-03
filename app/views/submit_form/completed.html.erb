@@ -21,14 +21,21 @@
       <% if all_submitters.size > 1 %>
         <div class="flex items-center justify-between w-full relative mb-2">
           <div class="absolute top-4 left-0 right-0 h-0.5 bg-base-300 z-0"></div>
+          <% co_signer_count = 0 %>
           <% all_submitters.each_with_index do |s, idx| %>
+            <% if s.id == @submitter.id %>
+              <% party_label = t('you') %>
+            <% else %>
+              <% co_signer_count += 1 %>
+              <% party_label = "#{t('co_signer')} #{co_signer_count}" %>
+            <% end %>
             <div class="flex flex-col items-center z-10">
               <% if s.completed_at? %>
                 <div class="w-8 h-8 rounded-full bg-success text-success-content flex items-center justify-center text-sm font-bold">✓</div>
-                <span class="text-xs mt-1 text-success font-medium whitespace-nowrap"><%= t('signing_party') %> <%= idx + 1 %></span>
+                <span class="text-xs mt-1 text-success font-medium whitespace-nowrap"><%= party_label %></span>
               <% else %>
                 <div class="w-8 h-8 rounded-full bg-base-300 text-base-content/50 flex items-center justify-center text-sm font-bold border-2 border-base-300">○</div>
-                <span class="text-xs mt-1 text-base-content/50 whitespace-nowrap"><%= t('signing_party') %> <%= idx + 1 %></span>
+                <span class="text-xs mt-1 text-base-content/50 whitespace-nowrap"><%= party_label %></span>
               <% end %>
             </div>
           <% end %>
