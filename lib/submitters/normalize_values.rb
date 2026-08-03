@@ -87,12 +87,16 @@ module Submitters
     end
 
     def normalize_date(field, value)
+      format = field.dig('preferences', 'format')
+
       if value.is_a?(Integer)
         Time.zone.at(value.to_s.first(10).to_i).to_date.to_s
-      elsif value.gsub(/\w/, '0') == field.dig('preferences', 'format').to_s.gsub(/\w/, '0')
-        TimeUtils.parse_date_string(value, field.dig('preferences', 'format')).to_s
+      elsif value.gsub(/\w/, '0') == format.to_s.gsub(/\w/, '0')
+        TimeUtils.parse_date_string(value, format).to_s
       else
-        Date.parse(value).to_s
+        # Resolve ambiguous values (e.g. 08/05/2026) with the field format rather
+        # than Date.parse, which would read them day-first.
+        TimeUtils.parse_date_value(value, format)&.to_s || value
       end
     rescue Date::Error
       value

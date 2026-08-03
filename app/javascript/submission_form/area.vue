@@ -280,6 +280,7 @@
 
 <script>
 import MarkdownContent from './markdown_content'
+import { formatDateString, defaultDateFormat, resolvedLocale } from './date_utils'
 import { IconTextSize, IconWritingSign, IconCalendarEvent, IconPhoto, IconCheckbox, IconPaperclip, IconSelect, IconCircleDot, IconChecks, IconCheck, IconColumns3, IconPhoneCheck, IconLetterCaseUpper, IconCreditCard, IconRubberStamp, IconSquareNumber1, IconId } from '@tabler/icons-vue'
 
 export default {
@@ -599,23 +600,19 @@ export default {
       }
     },
     locale () {
-      return Intl.DateTimeFormat().resolvedOptions()?.locale
+      return resolvedLocale()
     },
-formattedDate () {
-  const DATE_FIELD_TYPES = ['date', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate', 'signaturedate', 'currentdate', 'datewithmonthname']
-  if (DATE_FIELD_TYPES.includes(this.field.type) && this.modelValue) {
-    try {
-      const date = this.modelValue === '{{date}}' ? new Date() : this.parseDateLocal(this.modelValue)
-      return this.formatDate(
-        date,
-        this.field.preferences?.format || (this.locale.endsWith('-US') ? 'MM/DD/YYYY' : 'DD/MM/YYYY')
-      )
-    } catch {
-      return this.modelValue
-    }
-  } else {
+    formattedDate () {
+      const DATE_FIELD_TYPES = ['date', 'candidateavailablefrom', 'candidateavailablefromdate', 'startdate', 'enddate', 'signaturedate', 'currentdate', 'datewithmonthname']
+
+      if (!DATE_FIELD_TYPES.includes(this.field.type) || !this.modelValue) {
         return ''
       }
+
+      const value = this.modelValue === '{{date}}' ? new Date() : this.modelValue
+      const format = this.field.preferences?.format || defaultDateFormat(this.locale)
+
+      return formatDateString(value, format, this.locale)
     },
     attachments () {
       if (this.field.type === 'file') {
@@ -723,65 +720,8 @@ formattedDate () {
         return number
       }
     },
-    parseDateLocal (value) {
-      // Parse a date string into a local-midnight Date object to avoid
-      // timezone shift issues with new Date() for date-only strings.
-      const str = String(value).trim()
-
-      // YYYY-MM-DD (ISO date-only — JS treats this as UTC, causing tz bugs)
-      let match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-      if (match) {
-        return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]))
-      }
-
-      // MM/DD/YYYY or MM-DD-YYYY
-      match = str.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$/)
-      if (match) {
-        return new Date(parseInt(match[3]), parseInt(match[1]) - 1, parseInt(match[2]))
-      }
-
-      // DD.MM.YYYY
-      match = str.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
-      if (match) {
-        return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]))
-      }
-
-      // Fallback: let JS parse it (for datetime strings, etc.)
-      return new Date(value)
-    },
     formatDate (date, format) {
-      const monthFormats = {
-        M: 'numeric',
-        MM: '2-digit',
-        MMM: 'short',
-        MMMM: 'long'
-      }
-
-      const dayFormats = {
-        D: 'numeric',
-        DD: '2-digit'
-      }
-
-      const yearFormats = {
-        YYYY: 'numeric',
-        YYY: 'numeric',
-        YY: '2-digit'
-      }
-
-      const dayToken = (format.match(/D+/) || [])[0] || 'DD'
-      const monthToken = (format.match(/M+/) || [])[0] || 'MM'
-      const yearToken = (format.match(/Y+/) || [])[0] || 'YYYY'
-
-      const parts = new Intl.DateTimeFormat([], {
-        day: dayFormats[dayToken],
-        month: monthFormats[monthToken],
-        year: yearFormats[yearToken]
-      }).formatToParts(date)
-
-      return format
-        .replace(/D+/, parts.find((p) => p.type === 'day').value)
-        .replace(/M+/, parts.find((p) => p.type === 'month').value)
-        .replace(/Y+/, parts.find((p) => p.type === 'year').value)
+      return formatDateString(date, format, this.locale)
     },
     updateMultipleSelectValue (value) {
       if (this.modelValue?.includes(value)) {

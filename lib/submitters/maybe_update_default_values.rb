@@ -204,19 +204,11 @@ module Submitters
       return value if value.blank?
 
       # Already YYYY-MM-DD, return as-is
-      return value if value.match?(/^\d{4}-\d{2}-\d{2}$/)
+      return value if value.to_s.match?(/^\d{4}-\d{2}-\d{2}$/)
 
-      # MM/DD/YYYY or MM-DD-YYYY (1 or 2 digit month/day) → YYYY-MM-DD
-      if (match = value.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/))
-        return "#{match[3]}-#{match[1].rjust(2, '0')}-#{match[2].rjust(2, '0')}"
-      end
-
-      # Try Ruby Date.parse as fallback
-      begin
-        Date.parse(value).to_s
-      rescue Date::Error
-        value
-      end
+      # Month-first by convention for ambiguous values; also handles year-first,
+      # space separated ("2026 08 05") and compact ISO values.
+      TimeUtils.parse_date_value(value, TimeUtils::DEFAULT_DATE_FORMAT_US)&.to_s || value
     end
 
   end

@@ -65,6 +65,7 @@
 import { IconCalendarCheck } from '@tabler/icons-vue'
 import AppearsOn from './appears_on'
 import MarkdownContent from './markdown_content'
+import { toIsoDateString, toUsDateString, todayIsoDateString } from './date_utils'
 
 export default {
   name: 'DateStep',
@@ -93,13 +94,7 @@ export default {
   emits: ['update:model-value', 'focus', 'submit'],
   computed: {
     dateNowString () {
-      const today = new Date()
-
-      const yyyy = today.getFullYear()
-      const mm = String(today.getMonth() + 1).padStart(2, '0')
-      const dd = String(today.getDate()).padStart(2, '0')
-
-      return `${yyyy}-${mm}-${dd}`
+      return todayIsoDateString()
     },
     validationMin () {
       if (this.field.validation?.min) {
@@ -130,19 +125,15 @@ export default {
         return true
       }
     },
-value: {
-  set (value) {
-    // Convert YYYY-MM-DD back to MM/DD/YYYY before storing
-    if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      const parts = value.split('-')
-      value = `${parts[1]}/${parts[2]}/${parts[0]}`
+    value: {
+      set (value) {
+        // Stored as MM/DD/YYYY; the native input always hands us YYYY-MM-DD.
+        this.$emit('update:model-value', value ? toUsDateString(value) : value)
+      },
+      get () {
+        return this.toIsoDate(this.modelValue)
+      }
     }
-    this.$emit('update:model-value', value)
-  },
-  get () {
-    return this.toIsoDate(this.modelValue)
-  }
-},
   },
   mounted () {
     this.$nextTick(() => {
@@ -166,47 +157,25 @@ value: {
     onPaste (e) {
       e.preventDefault()
 
-      let pasteData = e.clipboardData.getData('text').trim()
+      const isoDate = toIsoDateString(e.clipboardData.getData('text'))
 
-      if (pasteData.match(/^\d{2}\.\d{2}\.\d{4}$/)) {
-        pasteData = pasteData.split('.').reverse().join('-')
-      }
-
-      const parsedDate = new Date(pasteData)
-
-      if (!isNaN(parsedDate)) {
+      if (isoDate) {
         const inputEl = this.$refs.input
 
-        inputEl.valueAsDate = new Date(parsedDate.getTime() - parsedDate.getTimezoneOffset() * 60000)
+        inputEl.value = isoDate
 
         inputEl.dispatchEvent(new Event('input', { bubbles: true }))
       }
     },
-toIsoDate (value) {
-  if (!value) return value
-  value = String(value).trim()
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  // Handle M/D/YYYY, MM/DD/YYYY, M-D-YYYY, MM-DD-YYYY (1 or 2 digit month/day)
-  const match = value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
-  if (match) {
-    const mm = match[1].padStart(2, '0')
-    const dd = match[2].padStart(2, '0')
-    return `${match[3]}-${mm}-${dd}`
-  }
-  // Fallback: try parsing as a date
-  const parsed = new Date(value)
-  if (!isNaN(parsed)) {
-    const yyyy = parsed.getFullYear()
-    const mm = String(parsed.getMonth() + 1).padStart(2, '0')
-    const dd = String(parsed.getDate()).padStart(2, '0')
-    return `${yyyy}-${mm}-${dd}`
-  }
-  return value
-},
+    toIsoDate (value) {
+      return toIsoDateString(value)
+    },
     setCurrentDate () {
+      // Assign the string rather than valueAsDate: iOS Safari is inconsistent
+      // about valueAsDate on date inputs.
       const inputEl = this.$refs.input
 
-      inputEl.valueAsDate = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+      inputEl.value = todayIsoDateString()
 
       inputEl.dispatchEvent(new Event('input', { bubbles: true }))
     }
