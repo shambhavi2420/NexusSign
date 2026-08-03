@@ -321,7 +321,9 @@ module Api
         'phone'           => params[:phone].presence,
         'external_id'     => params[:external_id].presence,
         'application_key' => params[:application_key].presence,
-        'metadata'        => params[:metadata].present? ? params[:metadata].to_unsafe_h : {}
+        'metadata'        => params[:metadata].present? ? params[:metadata].to_unsafe_h : {},
+        'send_email'      => params[:send_email],
+        'send_sms'        => params[:send_sms]
       }.compact
 
       params.merge!(submitters: [submitter_hash])

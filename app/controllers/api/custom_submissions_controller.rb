@@ -79,8 +79,25 @@ module Api
 
         # ----------------------------------------------------------------
         # 5. Build params compatible with Submissions.create_from_submitters
+        #    Per-submitter send_email/send_sms overrides the global flag
+        #    (mirrors submissions#create behaviour).
         # ----------------------------------------------------------------
+        global_send_email = params[:send_email] != false
+        global_send_sms   = params[:send_sms] == true
+
         normalized_submitters = submitters_array.map do |s|
+          submitter_send_email = if s.key?(:send_email)
+                                   s[:send_email] != false && s[:send_email] != 'false'
+                                 else
+                                   global_send_email
+                                 end
+
+          submitter_send_sms = if s.key?(:send_sms)
+                                 s[:send_sms] == true || s[:send_sms] == 'true'
+                               else
+                                 global_send_sms
+                               end
+
           {
             'email'           => s[:email],
             'name'            => s[:name].presence,
@@ -89,8 +106,8 @@ module Api
             'external_id'     => s[:external_id].presence,
             'application_key' => s[:application_key].presence,
             'metadata'        => s[:metadata].present? ? s[:metadata].to_h : {},
-            'send_email'      => params[:send_email] != false,
-            'send_sms'        => params[:send_sms] == true
+            'send_email'      => submitter_send_email,
+            'send_sms'        => submitter_send_sms
           }.compact
         end
 
@@ -98,8 +115,8 @@ module Api
           template_id:      template.id,
           submitters:       normalized_submitters,
           submitters_order: params[:submitters_order] || 'preserved',
-          send_email:       params[:send_email] != false,
-          send_sms:         params[:send_sms] == true
+          send_email:       global_send_email,
+          send_sms:         global_send_sms
         )
 
         # ----------------------------------------------------------------
