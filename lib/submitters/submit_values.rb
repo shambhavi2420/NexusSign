@@ -139,21 +139,25 @@ end
     end
 
     def normalized_values(params)
-      puts "DEBUG SUBMITTED VALUES: #{params.fetch(:values, {}).to_unsafe_h.inspect}"
-      params.fetch(:values, {}).to_unsafe_h.transform_values do |v|
-        if params[:cast_boolean] == 'true'
-          v == 'true'
-        elsif params[:cast_number] == 'true'
-          if v == ''
-            nil
-          else
-            (v.to_f % 1).zero? ? v.to_i : v.to_f
-          end
-        elsif params[:normalize_phone] == 'true'
-          v.to_s.gsub(/[^0-9+]/, '')
-        else
-          v.is_a?(Array) ? v.compact_blank : v
+      values = params.fetch(:values, {}).to_unsafe_h
+
+      if params[:cast_boolean] == 'true'
+        values.transform_values { |v| v == 'true' }
+      elsif params[:cast_number] == 'true'
+        values.to_h do |field_uuid, v|
+          cast_value = if v == ''
+                         nil
+                       elsif v.is_a?(String) && v.match?(/\A-?\d*\.?\d+\z/)
+                         (v.to_f % 1).zero? ? v.to_i : v.to_f
+                       else
+                         v.is_a?(Array) ? v.compact_blank : v
+                       end
+          [field_uuid, cast_value]
         end
+      elsif params[:normalize_phone] == 'true'
+        values.transform_values { |v| v.to_s.gsub(/[^0-9+]/, '') }
+      else
+        values.transform_values { |v| v.is_a?(Array) ? v.compact_blank : v }
       end
     end
 
