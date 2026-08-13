@@ -29,7 +29,60 @@ module Templates
       2 => 'right'
     }.freeze
 
+    # Maps AcroForm field names (downcased) to custom NexusSign field types.
+    # When a PDF text field has one of these names, it gets the custom type
+    # instead of generic 'text', enabling auto-fill via MaybeUpdateDefaultValues.
+    CUSTOM_FIELD_NAME_TO_TYPE = {
+      'signer full name'               => 'signerfullname',
+      'signer first name'              => 'signerfirstname',
+      'signer last name'               => 'signerlastname',
+      'signer primary phone'           => 'signerprimaryphone',
+      'signer email'                   => 'signeremail',
+      'candidate permanent address 1'  => 'candidatepermanentaddress1',
+      'candidate permanent city'       => 'candidatepermanentcity',
+      'candidate permanent state'      => 'candidatepermanentstate',
+      'candidate permanent zip'        => 'candidatepermanentzip',
+      'candidate ssn'                  => 'candidatessn',
+      'candidate primary profession'   => 'candidateprimaryprofession',
+      'candidate primary specialty'    => 'candidateprimaryspecialty',
+      'candidate available from'       => 'candidateavailablefrom',
+      'candidate available from date'  => 'candidateavailablefromdate',
+      'candidate profession'           => 'candidateprofession',
+      'candidate specialty'            => 'candidatespecialty',
+      'candidate address'              => 'candidateaddress',
+      'candidate city'                 => 'candidatecity',
+      'candidate state'                => 'candidatestate',
+      'candidate zipcode'              => 'candidatezip',
+      'signature date'                 => 'signaturedate',
+      'current date'                   => 'currentdate',
+      'job id'                         => 'jobid',
+      'date with month name'           => 'datewithmonthname',
+      'date of month'                  => 'dateofmonth',
+      'month'                          => 'month',
+      'year'                           => 'year',
+      'recruiter'                      => 'recruiter',
+      'recruiter phone'                => 'recruiterphone',
+      'recruiter email'                => 'recruiteremail',
+      'start date'                     => 'startdate',
+      'end date'                       => 'enddate',
+      'client name'                    => 'clientname',
+      'recruiter title'                => 'recruitertitle',
+      'sales representative'           => 'salesrepresentative',
+      'work authorization'             => 'workauthorization'
+    }.freeze
+
     module_function
+
+    # Looks up a field name in CUSTOM_FIELD_NAME_TO_TYPE, stripping trailing
+    # numbers added by PDF deduplication (e.g. "Signer Full Name 2" → "signer full name").
+    def find_custom_field_type(name)
+      clean = name.to_s.strip.downcase
+      return CUSTOM_FIELD_NAME_TO_TYPE[clean] if CUSTOM_FIELD_NAME_TO_TYPE.key?(clean)
+
+      # Strip trailing " N" (dedup suffix from PDF injection)
+      without_number = clean.sub(/\s+\d+\z/, '')
+      CUSTOM_FIELD_NAME_TO_TYPE[without_number]
+    end
 
     # rubocop:disable Metrics
     def call(pdf, attachment, data)
@@ -267,6 +320,12 @@ module Templates
             **attrs,
             type: 'date',
             default_value: field.field_value
+          }
+        elsif (custom_type = find_custom_field_type(attrs[:name]))
+          {
+            **attrs,
+            type: custom_type,
+            default_value: nil
           }
         else
           {

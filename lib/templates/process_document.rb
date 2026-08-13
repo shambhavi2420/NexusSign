@@ -206,7 +206,7 @@ module Templates
 
     FIELD_NAME_MAPPINGS = {
       full_name: { pattern: /\b(full\s*name|fullname|signer\s*name|employee\s*name|print\s*name)\b/i,
-                   type: 'text', name: 'Signer Full Name' },
+                   type: 'signerfullname', name: 'Signer Full Name' },
       signature: { pattern: /\b(signature|sign here|signer)\b/i,
                    type: 'signature', name: 'Signature' },
       date:      { pattern: /\b(date|signed\s*date|date\s*signed)\b/i,
@@ -217,6 +217,9 @@ module Templates
 
     def apply_smart_field_mapping(fields)
       fields.map do |field|
+        # Skip fields that already have a custom type (set by FindAcroFields)
+        next field if field['type'] != 'text'
+
         field_name = field['name'].to_s
 
         matched = FIELD_NAME_MAPPINGS.values.find { |mapping| field_name.match?(mapping[:pattern]) }
