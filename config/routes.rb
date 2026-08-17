@@ -57,6 +57,7 @@ Rails.application.routes.draw do
     end
 
 
+    resources :folders, only: %i[index]
     resources :templates, only: %i[update show index destroy] do
       resources :clone, only: %i[create], controller: 'templates_clone'
       resources :submissions, only: %i[index create]
