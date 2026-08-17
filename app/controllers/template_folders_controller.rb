@@ -3,7 +3,7 @@
 class TemplateFoldersController < ApplicationController
   load_and_authorize_resource :template_folder
 
-  before_action :authorize_admin_for_edit, only: %i[edit update]
+  before_action :authorize_admin_for_edit, only: %i[edit]
 
   helper_method :selected_order
 
@@ -51,8 +51,14 @@ class TemplateFoldersController < ApplicationController
   def edit; end
 
   def update
-    if @template_folder != current_account.default_template_folder &&
-       @template_folder.update(template_folder_params)
+    if params[:template_folder].key?(:api_visible)
+      if @template_folder.update(template_folder_params.slice(:api_visible))
+        redirect_to folder_path(@template_folder), notice: I18n.t('folder_has_been_updated')
+      else
+        redirect_to folder_path(@template_folder), alert: I18n.t('unable_to_update_folder')
+      end
+    elsif @template_folder != current_account.default_template_folder &&
+          @template_folder.update(template_folder_params)
       redirect_to folder_path(@template_folder), notice: I18n.t('folder_name_has_been_updated')
     else
       redirect_to folder_path(@template_folder), alert: I18n.t('unable_to_rename_folder')
@@ -72,7 +78,7 @@ class TemplateFoldersController < ApplicationController
   end
 
   def template_folder_params
-    params.require(:template_folder).permit(:name)
+    params.require(:template_folder).permit(:name, :api_visible)
   end
 
   def authorize_admin_for_edit
