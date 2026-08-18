@@ -51,8 +51,8 @@ class TemplateFoldersController < ApplicationController
   def edit; end
 
   def update
-    if params[:template_folder].key?(:api_visible)
-      if @template_folder.update(template_folder_params.slice(:api_visible))
+    if params[:template_folder]&.key?('api_visible')
+      if @template_folder.update(api_visible: template_folder_params[:api_visible])
         redirect_to folder_path(@template_folder), notice: I18n.t('folder_has_been_updated')
       else
         redirect_to folder_path(@template_folder), alert: I18n.t('unable_to_update_folder')
