@@ -31,9 +31,13 @@
     </h1>
     <% if can?(:update, @template_folder) %>
       <div class="flex items-center ml-4 <%= 'hidden' if params[:q].present? %>">
-        <%= form_for @template_folder, url: folder_path(@template_folder), method: :patch, data: { turbo_frame: :_top } do |f| %>
+        <%= form_for @template_folder, url: folder_path(@template_folder), method: :patch do |f| %>
           <label class="flex items-center gap-2 cursor-pointer">
-            <%= f.check_box :api_visible, { checked: @template_folder.api_visible, class: 'toggle toggle-sm border-red-400 bg-red-400 checked:border-green-500 checked:bg-green-500', onchange: 'this.form.requestSubmit()' } %>
+            <input type="hidden" name="template_folder[api_visible]" value="0">
+            <input type="checkbox" name="template_folder[api_visible]" value="1"
+              <%= 'checked' if @template_folder.api_visible? %>
+              class="toggle toggle-sm border-red-400 bg-red-400 checked:border-green-500 checked:bg-green-500"
+              onchange="this.form.submit()">
             <span class="text-sm font-normal whitespace-nowrap"><%= t('visible_on_nexus') %></span>
           </label>
         <% end %>
