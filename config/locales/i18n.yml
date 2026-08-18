@@ -548,6 +548,7 @@ en: &en
   folder_has_been_updated: Folder has been updated.
   unable_to_update_folder: Unable to update folder.
   visible_in_api: Visible in API
+  visible_on_nexus: Visible on Nexus
   unable_to_rename_folder: Unable to rename folder.
   template_has_been_removed: Template has been removed.
   template_has_been_archived: Template has been archived.
