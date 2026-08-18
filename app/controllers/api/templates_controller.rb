@@ -109,6 +109,10 @@ module Api
         templates = templates.where(folder_id: folders.pluck(:id))
       end
 
+      if params[:folder_id].present?
+        templates = templates.where(folder_id: params[:folder_id])
+      end
+
       templates
     end
 
