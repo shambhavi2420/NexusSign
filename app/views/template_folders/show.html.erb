@@ -29,6 +29,16 @@
         </span>
       <% end %>
     </h1>
+    <% if can?(:update, @template_folder) %>
+      <div class="flex items-center ml-4 <%= 'hidden' if params[:q].present? %>">
+        <%= form_for @template_folder, url: folder_path(@template_folder), method: :patch, data: { turbo_frame: :_top } do |f| %>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <%= f.check_box :api_visible, { checked: @template_folder.api_visible, class: 'toggle toggle-sm toggle-primary', onchange: 'this.form.requestSubmit()' } %>
+            <span class="text-sm font-normal whitespace-nowrap"><%= t('visible_in_api') %></span>
+          </label>
+        <% end %>
+      </div>
+    <% end %>
     <div class="flex space-x-2">
       <% if params[:q].present? || @pagy.pages > 1 || @template_folders.present? %>
         <%= render 'shared/search_input' %>

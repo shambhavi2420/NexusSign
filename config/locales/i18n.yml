@@ -545,6 +545,9 @@ en: &en
   form_has_been_declined: Form has been declined.
   file_is_missing: File is missing
   folder_name_has_been_updated: Folder name has been updated.
+  folder_has_been_updated: Folder has been updated.
+  unable_to_update_folder: Unable to update folder.
+  visible_in_api: Visible in API
   unable_to_rename_folder: Unable to rename folder.
   template_has_been_removed: Template has been removed.
   template_has_been_archived: Template has been archived.

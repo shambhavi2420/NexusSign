@@ -41,6 +41,7 @@ class TemplateFolder < ApplicationRecord
   has_many :permitted_users, through: :template_folder_permissions, source: :user
 
   scope :active, -> { where(archived_at: nil) }
+  scope :api_visible, -> { where(api_visible: true) }
 
   def full_name
     if parent_folder_id?
