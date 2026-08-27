@@ -1,6 +1,6 @@
 pg_data/
 docuseal/
 .env
-*.rdb
+docuseal.env
 *.rdb
 docuseal/dump.rdb
