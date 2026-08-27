@@ -13,6 +13,7 @@ module Api
     wrap_parameters false
 
     before_action :authenticate_user!
+    before_action :set_storage_url_options
     check_authorization
 
     rescue_from Params::BaseValidator::InvalidParameterError do |e|
@@ -38,6 +39,12 @@ module Api
     end
 
     private
+
+    # Ensure ActiveStorage proxy/file URLs in API responses use the app's public
+    # host (from app_url) instead of falling back to http://localhost:3000.
+    def set_storage_url_options
+      ActiveStorage::Current.url_options = Docuseal.default_url_options
+    end
 
     def access_denied_error_message(error)
       return 'Not authorized' if request.headers['X-Auth-Token'].blank?
