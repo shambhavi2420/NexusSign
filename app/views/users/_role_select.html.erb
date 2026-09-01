@@ -1,6 +1,9 @@
 <div class="form-control">
   <%= f.label :role, class: 'label' %>
   <%= f.select :role, nil, {}, class: 'base-select' do %>
+    <% if current_user.super_admin? %>
+      <option value="super_admin"><%= t('super_admin') %></option>
+    <% end %>
     <option value="admin"><%= t('admin') %></option>
     <option value="editor"><%= t('editor') %></option>
     <option value="viewer"><%= t('viewer') %></option>

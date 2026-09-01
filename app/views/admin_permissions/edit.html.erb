@@ -1,0 +1,20 @@
+<%= render 'shared/turbo_modal', title: t('admin_settings_access') do %>
+  <%= form_with url: settings_user_permissions_path(@admin), method: :patch, html: { class: 'space-y-4' }, data: { turbo_frame: :_top } do |f| %>
+    <p class="text-sm text-neutral">
+      <%= t('choose_which_settings_this_admin_can_access', name: @admin.full_name.presence || @admin.email) %>
+    </p>
+    <div class="space-y-2">
+      <%# Ensure an empty selection is submitted when everything is unchecked. %>
+      <%= hidden_field_tag 'user[admin_permissions][]', '' %>
+      <% SettingsSections.all.each do |key, section| %>
+        <label class="flex items-center space-x-3 py-1 cursor-pointer">
+          <%= check_box_tag 'user[admin_permissions][]', key, @admin.admin_permissions.include?(key), class: 'base-checkbox', id: "admin_permission_#{key}" %>
+          <span class="text-base"><%= t(section[:label_key]) %></span>
+        </label>
+      <% end %>
+    </div>
+    <div class="form-control pt-2">
+      <%= f.button button_title, class: 'base-button' %>
+    </div>
+  <% end %>
+<% end %>

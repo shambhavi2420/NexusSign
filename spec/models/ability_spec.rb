@@ -6,9 +6,9 @@ RSpec.describe Ability, type: :model do
   describe 'TemplateFolderPermission authorization' do
     let(:account) { create(:account) }
 
-    describe 'admin role' do
-      let(:admin) { create(:user, account: account, role: 'admin') }
-      let(:ability) { Ability.new(admin) }
+    describe 'super_admin role' do
+      let(:super_admin) { create(:user, account: account, role: 'super_admin') }
+      let(:ability) { Ability.new(super_admin) }
 
       it 'can manage any TemplateFolderPermission' do
         other_user = create(:user, account: account, role: 'editor')
@@ -16,6 +16,29 @@ RSpec.describe Ability, type: :model do
         permission = create(:template_folder_permission, template_folder: folder, user: other_user)
 
         expect(ability.can?(:manage, permission)).to be true
+      end
+    end
+
+    describe 'admin role' do
+      let(:admin) { create(:user, account: account, role: 'admin') }
+      let(:ability) { Ability.new(admin) }
+
+      it 'cannot manage TemplateFolderPermission without the folder_permissions section' do
+        other_user = create(:user, account: account, role: 'editor')
+        folder = create(:template_folder, account: account, author: other_user)
+        permission = create(:template_folder_permission, template_folder: folder, user: other_user)
+
+        expect(ability.can?(:manage, permission)).to be false
+      end
+
+      it 'can manage any TemplateFolderPermission when granted the folder_permissions section' do
+        admin.admin_permissions = ['folder_permissions']
+
+        other_user = create(:user, account: account, role: 'editor')
+        folder = create(:template_folder, account: account, author: other_user)
+        permission = create(:template_folder_permission, template_folder: folder, user: other_user)
+
+        expect(Ability.new(admin).can?(:manage, permission)).to be true
       end
     end
 

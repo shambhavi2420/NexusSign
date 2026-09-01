@@ -500,6 +500,10 @@ en: &en
   member: Member
   agent: Agent
   superadmin: Superadmin
+  super_admin: Super Admin
+  access: Access
+  admin_settings_access: Admin Settings Access
+  choose_which_settings_this_admin_can_access: Choose which settings %{name} can access.
   edit_user: Edit User
   new_user: New User
   unarchive: Unarchive

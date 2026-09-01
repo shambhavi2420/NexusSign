@@ -18,6 +18,7 @@ class SetupController < ApplicationController
     @account = Account.new(account_params)
     @account.timezone = Accounts.normalize_timezone(@account.timezone)
     @user = @account.users.new(user_params)
+    @user.role = User::SUPER_ADMIN_ROLE
     @encrypted_config = EncryptedConfig.new(encrypted_config_params)
 
     unless URI.parse(encrypted_config_params[:value].to_s).class.in?([URI::HTTP, URI::HTTPS])

@@ -14,16 +14,20 @@ class FolderPermissionsSettingsController < ApplicationController
   private
 
   def authorize_access
-    return if current_user.role == User::ADMIN_ROLE
+    return if folder_permissions_admin?
     return if current_account.template_folders.active.exists?(author_id: current_user.id)
 
     redirect_to root_path, alert: I18n.t('not_authorized')
   end
 
+  def folder_permissions_admin?
+    current_user.super_admin? || current_user.can_access_setting?('folder_permissions')
+  end
+
   def manageable_folders
     scope = current_account.template_folders.active.order(:name)
 
-    scope = if current_user.role == User::ADMIN_ROLE
+    scope = if folder_permissions_admin?
               scope
             else
               scope.where(author_id: current_user.id)

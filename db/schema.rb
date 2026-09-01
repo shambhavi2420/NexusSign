@@ -10,10 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_09_22_053744) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_01_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gin"
-  enable_extension "plpgsql"
+  enable_extension "pg_catalog.plpgsql"
 
   create_table "access_tokens", force: :cascade do |t|
     t.bigint "user_id", null: false
@@ -161,7 +161,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_22_053744) do
     t.string "event_name", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["submitter_id", "event_name"], name: "index_document_generation_events_on_submitter_id_and_event_name", unique: true, where: "((event_name)::text = ANY ((ARRAY['start'::character varying, 'complete'::character varying])::text[]))"
+    t.index ["submitter_id", "event_name"], name: "index_document_generation_events_on_submitter_id_and_event_name", unique: true, where: "((event_name)::text = ANY (ARRAY[('start'::character varying)::text, ('complete'::character varying)::text]))"
     t.index ["submitter_id"], name: "index_document_generation_events_on_submitter_id"
   end
 
@@ -178,7 +178,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_22_053744) do
     t.datetime "created_at", null: false
     t.index ["account_id", "event_datetime"], name: "index_email_events_on_account_id_and_event_datetime"
     t.index ["email"], name: "index_email_events_on_email"
-    t.index ["email"], name: "index_email_events_on_email_event_types", where: "((event_type)::text = ANY ((ARRAY['bounce'::character varying, 'soft_bounce'::character varying, 'permanent_bounce'::character varying, 'complaint'::character varying, 'soft_complaint'::character varying])::text[]))"
+    t.index ["email"], name: "index_email_events_on_email_event_types", where: "((event_type)::text = ANY (ARRAY[('bounce'::character varying)::text, ('soft_bounce'::character varying)::text, ('permanent_bounce'::character varying)::text, ('complaint'::character varying)::text, ('soft_complaint'::character varying)::text]))"
     t.index ["emailable_type", "emailable_id"], name: "index_email_events_on_emailable"
     t.index ["message_id"], name: "index_email_events_on_message_id"
   end
@@ -217,12 +217,38 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_22_053744) do
     t.index ["user_id"], name: "index_encrypted_user_configs_on_user_id"
   end
 
+  create_table "envelope_submissions", force: :cascade do |t|
+    t.bigint "envelope_id", null: false
+    t.bigint "submission_id", null: false
+    t.integer "position", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["envelope_id", "position"], name: "index_envelope_submissions_on_envelope_id_and_position"
+    t.index ["submission_id"], name: "index_envelope_submissions_on_submission_id", unique: true
+  end
+
+  create_table "envelopes", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "created_by_user_id"
+    t.text "name"
+    t.string "slug", null: false
+    t.text "preferences", default: "{}", null: false
+    t.text "document_order", default: "[]", null: false
+    t.datetime "archived_at"
+    t.datetime "expire_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "created_at"], name: "index_envelopes_on_account_id_and_created_at"
+    t.index ["account_id", "id"], name: "index_envelopes_on_account_id_and_id"
+    t.index ["slug"], name: "index_envelopes_on_slug", unique: true
+  end
+
   create_table "lock_events", force: :cascade do |t|
     t.string "key", null: false
     t.string "event_name", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["event_name", "key"], name: "index_lock_events_on_event_name_and_key", unique: true, where: "((event_name)::text = ANY ((ARRAY['start'::character varying, 'complete'::character varying])::text[]))"
+    t.index ["event_name", "key"], name: "index_lock_events_on_event_name_and_key", unique: true, where: "((event_name)::text = ANY (ARRAY[('start'::character varying)::text, ('complete'::character varying)::text]))"
     t.index ["key"], name: "index_lock_events_on_key"
   end
 
@@ -316,6 +342,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_22_053744) do
     t.text "name"
     t.text "variables_schema"
     t.text "variables"
+    t.bigint "envelope_id"
     t.index ["account_id", "id"], name: "index_submissions_on_account_id_and_id"
     t.index ["account_id", "template_id", "id"], name: "index_submissions_on_account_id_and_template_id_and_id", where: "(archived_at IS NULL)"
     t.index ["account_id", "template_id", "id"], name: "index_submissions_on_account_id_and_template_id_and_id_archived", where: "(archived_at IS NOT NULL)"
@@ -353,12 +380,42 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_22_053744) do
     t.index ["submission_id"], name: "index_submitters_on_submission_id"
   end
 
+  create_table "team_memberships", force: :cascade do |t|
+    t.bigint "team_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["team_id", "user_id"], name: "index_team_memberships_on_team_id_and_user_id", unique: true
+    t.index ["team_id"], name: "index_team_memberships_on_team_id"
+    t.index ["user_id"], name: "index_team_memberships_on_user_id"
+  end
+
+  create_table "teams", force: :cascade do |t|
+    t.string "name", null: false
+    t.bigint "account_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "name"], name: "index_teams_on_account_id_and_name", unique: true
+    t.index ["account_id"], name: "index_teams_on_account_id"
+  end
+
   create_table "template_accesses", force: :cascade do |t|
     t.bigint "template_id", null: false
     t.bigint "user_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["template_id", "user_id"], name: "index_template_accesses_on_template_id_and_user_id", unique: true
+  end
+
+  create_table "template_folder_permissions", force: :cascade do |t|
+    t.bigint "template_folder_id", null: false
+    t.bigint "user_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "team_id"
+    t.index ["team_id"], name: "index_template_folder_permissions_on_team_id"
+    t.index ["template_folder_id", "team_id"], name: "idx_tfp_on_folder_and_team", unique: true, where: "(team_id IS NOT NULL)"
+    t.index ["template_folder_id", "user_id"], name: "idx_tfp_on_folder_and_user", unique: true
   end
 
   create_table "template_folders", force: :cascade do |t|
@@ -369,6 +426,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_22_053744) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "parent_folder_id"
+    t.boolean "api_visible", default: true, null: false
     t.index ["account_id"], name: "index_template_folders_on_account_id"
     t.index ["author_id"], name: "index_template_folders_on_author_id"
     t.index ["parent_folder_id"], name: "index_template_folders_on_parent_folder_id"
@@ -502,16 +560,26 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_22_053744) do
   add_foreign_key "email_messages", "users", column: "author_id"
   add_foreign_key "encrypted_configs", "accounts"
   add_foreign_key "encrypted_user_configs", "users"
+  add_foreign_key "envelope_submissions", "envelopes"
+  add_foreign_key "envelope_submissions", "submissions"
+  add_foreign_key "envelopes", "accounts"
+  add_foreign_key "envelopes", "users", column: "created_by_user_id"
   add_foreign_key "oauth_access_grants", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_grants", "users", column: "resource_owner_id"
   add_foreign_key "oauth_access_tokens", "oauth_applications", column: "application_id"
   add_foreign_key "oauth_access_tokens", "users", column: "resource_owner_id"
   add_foreign_key "submission_events", "submissions"
   add_foreign_key "submission_events", "submitters"
+  add_foreign_key "submissions", "envelopes"
   add_foreign_key "submissions", "templates"
   add_foreign_key "submissions", "users", column: "created_by_user_id"
   add_foreign_key "submitters", "submissions"
+  add_foreign_key "team_memberships", "teams"
+  add_foreign_key "team_memberships", "users"
+  add_foreign_key "teams", "accounts"
   add_foreign_key "template_accesses", "templates"
+  add_foreign_key "template_folder_permissions", "teams"
+  add_foreign_key "template_folder_permissions", "template_folders"
   add_foreign_key "template_folders", "accounts"
   add_foreign_key "template_folders", "template_folders", column: "parent_folder_id"
   add_foreign_key "template_folders", "users", column: "author_id"

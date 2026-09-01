@@ -63,6 +63,11 @@
                 <%= user.current_sign_in_at ? l(user.current_sign_in_at.in_time_zone(current_account.timezone), format: :short, locale: current_account.locale) : '-' %>
               </td>
               <td class="flex items-center space-x-2 justify-end">
+                <% if params[:status].blank? && current_user.super_admin? && user.role == User::ADMIN_ROLE && user.archived_at.blank? %>
+                  <%= link_to edit_settings_user_permissions_path(user), class: 'btn btn-outline btn-xs', title: t('admin_settings_access'), data: { turbo_frame: 'modal' } do %>
+                    <%= t('access') %>
+                  <% end %>
+                <% end %>
                 <% if params[:status].blank? && can?(:update, user) && user.archived_at.blank? %>
                   <%= link_to edit_user_path(user), class: 'btn btn-outline btn-xs', title: t('edit'), data: { turbo_frame: 'modal' } do %>
                     <%= t('edit') %>
