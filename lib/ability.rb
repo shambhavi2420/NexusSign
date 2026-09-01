@@ -43,6 +43,11 @@ class Ability
     # Account access (read/update) is a grantable section, not a baseline
     # ability, so it is applied via apply_settings_sections below.
     apply_settings_sections(user)
+
+    # Super admins are the highest level of control: a regular admin (even one
+    # granted the Users section) must never edit, delete, or change a super
+    # admin. This cannot-rule runs last so it overrides the section grant.
+    cannot :manage, User, role: User::SUPER_ADMIN_ROLE
   end
 
   def editor_abilities(user)
