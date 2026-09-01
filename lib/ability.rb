@@ -38,9 +38,10 @@ class Ability
     can :manage, UserConfig, user_id: user.id
     can :manage, AccessToken, user_id: user.id
     can :read, WebhookUrl, account_id: user.account_id
-    can %i[read update], Account, id: user.account_id
     can :manage, User, id: user.id
 
+    # Account access (read/update) is a grantable section, not a baseline
+    # ability, so it is applied via apply_settings_sections below.
     apply_settings_sections(user)
   end
 
