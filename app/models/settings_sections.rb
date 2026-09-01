@@ -57,6 +57,13 @@ module SettingsSections
     'api' => {
       label_key: 'API',
       abilities: [[:manage, AccessToken]]
+    },
+    # Data migration is guarded by a custom controller gate rather than a
+    # CanCanCan subject, so it has no abilities. Access is driven purely by
+    # User#can_access_setting?('data_migration').
+    'data_migration' => {
+      label_key: 'data_migration',
+      abilities: []
     }
   }.freeze
 
