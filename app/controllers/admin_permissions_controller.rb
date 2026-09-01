@@ -26,6 +26,8 @@ class AdminPermissionsController < ApplicationController
   def load_admin
     @admin = current_account.users.active.find(params[:user_id])
 
+    # Intentionally an exact match: permissions are only editable for regular
+    # admins. Super admins are unrestricted, so their access is not configurable.
     return if @admin.role == User::ADMIN_ROLE
 
     redirect_to settings_users_path, alert: I18n.t('not_authorized')

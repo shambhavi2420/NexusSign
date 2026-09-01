@@ -82,7 +82,7 @@ class TemplateFoldersController < ApplicationController
   end
 
   def authorize_admin_for_edit
-    return if current_user.role == User::ADMIN_ROLE
+    return if current_user.admin?
 
     redirect_to folder_path(@template_folder), alert: I18n.t('not_authorized')
   end

@@ -51,7 +51,7 @@ class TeamsController < ApplicationController
   private
 
   def authorize_admin
-    return if current_user.role == User::ADMIN_ROLE
+    return if current_user.admin?
 
     redirect_to root_path, alert: I18n.t('not_authorized')
   end
