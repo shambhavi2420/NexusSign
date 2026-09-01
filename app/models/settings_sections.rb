@@ -18,6 +18,10 @@ module SettingsSections
   # NOTE: keys are persisted per-user in UserConfig, so do not rename them
   # without a data migration.
   SECTIONS = {
+    'account' => {
+      label_key: 'account',
+      abilities: [[%i[read update], Account]]
+    },
     'email' => {
       label_key: 'email',
       abilities: [[%i[read create], EncryptedConfig, EncryptedConfig::EMAIL_SMTP_KEY]]
@@ -34,10 +38,6 @@ module SettingsSections
       label_key: 'personalization',
       abilities: [[%i[read create], AccountConfig]]
     },
-    'esign' => {
-      label_key: 'esign',
-      abilities: [[%i[read create update destroy], EncryptedConfig, EncryptedConfig::ESIGN_CERTS_KEY]]
-    },
     'users' => {
       label_key: 'users',
       abilities: [[:manage, User]]
@@ -49,10 +49,6 @@ module SettingsSections
     'folder_permissions' => {
       label_key: 'folder_permissions',
       abilities: [[:manage, TemplateFolderPermission]]
-    },
-    'webhooks' => {
-      label_key: 'webhooks',
-      abilities: [[:manage, WebhookUrl]]
     },
     'api' => {
       label_key: 'API',

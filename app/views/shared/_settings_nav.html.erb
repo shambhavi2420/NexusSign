@@ -9,29 +9,31 @@
       <li>
         <%= link_to t('profile'), settings_profile_index_path, class: 'text-base hover:bg-base-300' %>
       </li>
-      <li>
-        <%= link_to t('account'), settings_account_path, class: 'text-base hover:bg-base-300' %>
-      </li>
+      <% if current_user.super_admin? || current_user.can_access_setting?('account') %>
+        <li>
+          <%= link_to t('account'), settings_account_path, class: 'text-base hover:bg-base-300' %>
+        </li>
+      <% end %>
       <% unless Docuseal.multitenant? %>
-        <% if can?(:read, EncryptedConfig.new(key: EncryptedConfig::EMAIL_SMTP_KEY, account: current_account)) && ENV['SMTP_ADDRESS'].blank? &&  true_user == current_user %>
+        <% if (current_user.super_admin? || current_user.can_access_setting?('email')) && ENV['SMTP_ADDRESS'].blank? && true_user == current_user %>
           <li>
             <%= link_to t('email'), settings_email_index_path, class: 'text-base hover:bg-base-300' %>
           </li>
         <% end %>
-        <% if can?(:read, EncryptedConfig.new(key: EncryptedConfig::FILES_STORAGE_KEY, account: current_account)) && true_user == current_user %>
+        <% if (current_user.super_admin? || current_user.can_access_setting?('storage')) && true_user == current_user %>
           <li>
             <%= link_to t('storage'), settings_storage_index_path, class: 'text-base hover:bg-base-300' %>
           </li>
         <% end %>
 
       <% end %>
-      <% if can?(:read, AccountConfig) %>
+      <% if current_user.super_admin? || current_user.can_access_setting?('notifications') %>
         <li>
           <%= link_to t('notifications'), settings_notifications_path, class: 'text-base hover:bg-base-300' %>
         </li>
       <% end %>
 
-      <% if can?(:read, AccountConfig) %>
+      <% if current_user.super_admin? || current_user.can_access_setting?('personalization') %>
         <li>
           <%= link_to t('personalization'), settings_personalization_path, class: 'text-base hover:bg-base-300' %>
         </li>
