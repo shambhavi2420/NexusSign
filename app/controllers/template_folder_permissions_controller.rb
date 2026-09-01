@@ -73,7 +73,7 @@ class TemplateFolderPermissionsController < ApplicationController
   end
 
   def authorize_owner_or_admin
-    return if current_user.role == User::ADMIN_ROLE
+    return if current_user.admin?
     return if @template_folder.author_id == current_user.id
 
     raise CanCan::AccessDenied
