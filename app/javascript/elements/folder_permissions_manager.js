@@ -141,18 +141,22 @@ export default class extends HTMLElement {
     sorted.forEach(user => {
       const tr = document.createElement('tr')
       const isOwner = user.id === this.selectedFolderOwnerId
+      const isSuperAdmin = user.role === 'super_admin'
       const isAdmin = user.role === 'admin'
-      const canRevoke = !isOwner && !isAdmin
+      // Admins are revocable; only the folder owner and super admins are not.
+      // Super admins are the highest level of control and can never be revoked.
+      const canRevoke = !isOwner && !isSuperAdmin
 
       tr.id = `user_row_${user.id}`
       tr.innerHTML = `
         <td>
           ${this.escapeHtml(user.first_name || '')} ${this.escapeHtml(user.last_name || '')}
           ${isOwner ? '<span class="badge badge-sm badge-outline ml-1">Owner</span>' : ''}
+          ${isSuperAdmin ? '<span class="badge badge-sm badge-outline ml-1">Super Admin</span>' : ''}
           ${isAdmin ? '<span class="badge badge-sm badge-outline ml-1">Admin</span>' : ''}
         </td>
         <td>${this.escapeHtml(user.email)}</td>
-        <td class="capitalize">${this.escapeHtml(user.role)}</td>
+        <td>${this.escapeHtml(this.roleLabel(user.role))}</td>
         <td>
           ${canRevoke ? `<button type="button" class="btn btn-xs btn-error btn-outline min-h-[44px] min-w-[44px]"
             aria-label="Revoke access for ${this.escapeHtml(user.email)}"
@@ -377,6 +381,16 @@ export default class extends HTMLElement {
 
   hasExplicitPermissions = () => {
     return false
+  }
+
+  roleLabel = (role) => {
+    const labels = {
+      super_admin: 'Super Admin',
+      admin: 'Admin',
+      editor: 'Editor',
+      viewer: 'Viewer'
+    }
+    return labels[role] || role
   }
 
   escapeHtml = (text) => {
