@@ -9,6 +9,9 @@ class TeamMembershipsController < ApplicationController
   # POST /settings/teams/:team_id/memberships
   def create
     user = current_account.users.active.find(params[:user_id])
+
+    return deny_super_admin_change if user.super_admin? && !current_user.super_admin?
+
     TeamMembership.find_or_create_by!(team: @team, user:)
 
     redirect_to settings_team_path(@team), notice: I18n.t('user_added_to_team')
@@ -21,6 +24,9 @@ class TeamMembershipsController < ApplicationController
   # DELETE /settings/teams/:team_id/memberships/:id
   def destroy
     membership = @team.team_memberships.find_by(user_id: params[:id])
+
+    return deny_super_admin_change if membership&.user&.super_admin? && !current_user.super_admin?
+
     membership&.destroy
 
     redirect_to settings_team_path(@team), notice: I18n.t('user_removed_from_team')
@@ -32,6 +38,11 @@ class TeamMembershipsController < ApplicationController
     return if current_user.admin?
 
     redirect_to root_path, alert: I18n.t('not_authorized')
+  end
+
+  # Only a super admin may add or remove a super admin from a team.
+  def deny_super_admin_change
+    redirect_to settings_team_path(@team), alert: I18n.t('not_authorized')
   end
 
   def load_team
