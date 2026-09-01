@@ -4,3 +4,15 @@ docuseal/
 docuseal.env
 *.rdb
 docuseal/dump.rdb
+
+# Ignore Rails runtime artifacts (keep the .keep placeholders tracked)
+/log/*
+!/log/.keep
+/tmp/*
+!/tmp/.keep
+/tmp/cache/
+/tmp/pids/
+/tmp/local_secret.txt
+
+# Ignore bootsnap cache
+/tmp/cache/bootsnap*

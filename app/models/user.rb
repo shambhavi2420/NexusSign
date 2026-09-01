@@ -44,10 +44,15 @@
 #
 class User < ApplicationRecord
   ROLES = [
+    SUPER_ADMIN_ROLE = 'super_admin',
     ADMIN_ROLE = 'admin',
     'editor',
     'viewer'
   ].freeze
+
+  ADMIN_ROLES = [SUPER_ADMIN_ROLE, ADMIN_ROLE].freeze
+
+  ADMIN_PERMISSIONS_CONFIG_KEY = 'admin_permissions'
 
   EMAIL_REGEXP = /[^@;,<>\s]+@[^@;,<>\s]+/
 
@@ -76,7 +81,8 @@ class User < ApplicationRecord
 
   scope :active, -> { where(archived_at: nil) }
   scope :archived, -> { where.not(archived_at: nil) }
-  scope :admins, -> { where(role: ADMIN_ROLE) }
+  scope :admins, -> { where(role: ADMIN_ROLES) }
+  scope :super_admins, -> { where(role: SUPER_ADMIN_ROLE) }
 
   validates :email, format: { with: /\A[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\z/ }
 
@@ -92,10 +98,43 @@ class User < ApplicationRecord
     true
   end
 
+  def super_admin?
+    role == SUPER_ADMIN_ROLE
+  end
+
+  def admin?
+    role.in?(ADMIN_ROLES)
+  end
+
+  # List of settings section keys this admin is allowed to access.
+  # Super admins implicitly have access to everything, so the stored
+  # list only constrains regular admins.
+  def admin_permissions
+    config = user_configs.find_by(key: ADMIN_PERMISSIONS_CONFIG_KEY)
+
+    Array(config&.value).map(&:to_s)
+  end
+
+  def admin_permissions=(keys)
+    allowed = Array(keys).map(&:to_s).select(&:present?) & SettingsSections.keys
+
+    config = user_configs.find_or_initialize_by(key: ADMIN_PERMISSIONS_CONFIG_KEY)
+    config.value = allowed
+    config.save!
+  end
+
+  # True when the given settings section key is accessible to this user.
+  def can_access_setting?(section_key)
+    return true if super_admin?
+    return false unless admin?
+
+    admin_permissions.include?(section_key.to_s)
+  end
+
   def sidekiq?
     return true if Rails.env.development?
 
-    role == 'admin'
+    super_admin?
   end
 
   def self.sign_in_after_reset_password

@@ -36,21 +36,24 @@
           <%= link_to t('personalization'), settings_personalization_path, class: 'text-base hover:bg-base-300' %>
         </li>
       <% end %>
-      <% if can?(:read, User) %>
+      <% if current_user.super_admin? || current_user.can_access_setting?('users') %>
         <li>
           <%= link_to t('users'), settings_users_path, class: 'text-base hover:bg-base-300' %>
         </li>
       <% end %>
-      <% if current_user.role == User::ADMIN_ROLE ||
+      <% if current_user.super_admin? ||
+            current_user.can_access_setting?('folder_permissions') ||
             current_account.template_folders.active.exists?(author_id: current_user.id) %>
         <li>
           <%= link_to t('folder_permissions'), settings_folder_permissions_path, class: 'text-base hover:bg-base-300' %>
         </li>
       <% end %>
-      <% if current_user.role == User::ADMIN_ROLE %>
+      <% if current_user.super_admin? || current_user.can_access_setting?('teams') %>
         <li>
           <%= link_to t('teams'), settings_teams_path, class: 'text-base hover:bg-base-300' %>
         </li>
+      <% end %>
+      <% if current_user.admin? %>
         <li>
           <%= link_to t('data_migration'), data_migration_path, class: 'text-base hover:bg-base-300' %>
         </li>
