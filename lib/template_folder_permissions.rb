@@ -16,7 +16,7 @@ module TemplateFolderPermissions
   #   4. Any ancestor in the hierarchy that is restricted and excludes the user blocks access.
   #   5. The user must pass the node-level access check for the folder itself.
   def can_view?(user, folder)
-    return true if user.role == User::ADMIN_ROLE
+    return true if user.admin?
     return true if folder.author_id == user.id
     return false if user.archived_at?
 
@@ -35,7 +35,7 @@ module TemplateFolderPermissions
   # Returns an ActiveRecord relation of folders visible to the user.
   # Designed to be composed with other scopes (search, sort, pagination).
   def visible_to(folders_scope, user)
-    return folders_scope if user.role == User::ADMIN_ROLE
+    return folders_scope if user.admin?
 
     account_id = user.account_id
 
@@ -103,6 +103,10 @@ module TemplateFolderPermissions
 
   # Revokes view permission from an individual user.
   def revoke(user, folder)
+    # Super admins are the highest level of control and cannot be revoked by
+    # anyone through folder permissions.
+    return if user.super_admin?
+
     # Don't revoke the owner's access
     return if user.id == folder.author_id
 
@@ -164,14 +168,10 @@ module TemplateFolderPermissions
                         []
                       end
 
-      all_permitted_ids = (explicit_user_ids + team_user_ids).uniq
+      all_permitted_ids = (explicit_user_ids + team_user_ids + [folder.author_id]).uniq
 
-      active_users.where(
-        'id IN (?) OR id = ? OR role = ?',
-        all_permitted_ids,
-        folder.author_id,
-        User::ADMIN_ROLE
-      )
+      active_users.where(id: all_permitted_ids)
+                  .or(active_users.where(role: User::ADMIN_ROLES))
     else
       active_users
     end

@@ -75,7 +75,13 @@ class UsersController < ApplicationController
   private
 
   def role_valid?(role)
-    User::ROLES.include?(role)
+    return false unless User::ROLES.include?(role)
+
+    # Only a super admin may assign the super_admin role. This prevents a
+    # regular admin from creating or promoting anyone to super admin.
+    return false if role == User::SUPER_ADMIN_ROLE && !current_user.super_admin?
+
+    true
   end
 
   def build_user
