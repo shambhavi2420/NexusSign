@@ -60,6 +60,11 @@
           <%= link_to t('data_migration'), data_migration_path, class: 'text-base hover:bg-base-300' %>
         </li>
       <% end %>
+      <% if current_user.super_admin? || current_user.can_access_setting?('webhooks') %>
+        <li>
+          <%= link_to t('webhook_settings'), settings_webhooks_path, class: 'text-base hover:bg-base-300' %>
+        </li>
+      <% end %>
       <%= render 'shared/settings_nav_extra' %>
       <% if Docuseal.demo? || !Docuseal.multitenant? %>
         <% if current_user.super_admin? || current_user.can_access_setting?('api') %>
@@ -67,6 +72,12 @@
             <%= link_to 'API', settings_api_index_path, class: 'text-base hover:bg-base-300' %>
           </li>
         <% end %>
+      <% end %>
+      <% if !Docuseal.multitenant? && defined?(Sidekiq::Web) &&
+            (current_user.super_admin? || current_user.can_access_setting?('jobs')) %>
+        <li>
+          <%= link_to t('background_jobs'), '/jobs', class: 'text-base hover:bg-base-300' %>
+        </li>
       <% end %>
     </ul>
   </menu-active>

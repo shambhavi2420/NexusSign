@@ -134,7 +134,7 @@ class User < ApplicationRecord
   def sidekiq?
     return true if Rails.env.development?
 
-    super_admin?
+    can_access_setting?('jobs')
   end
 
   def self.sign_in_after_reset_password
