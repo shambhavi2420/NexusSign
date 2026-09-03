@@ -76,7 +76,7 @@
       <% if !Docuseal.multitenant? && defined?(Sidekiq::Web) &&
             (current_user.super_admin? || current_user.can_access_setting?('jobs')) %>
         <li>
-          <%= link_to t('background_jobs'), '/jobs', class: 'text-base hover:bg-base-300' %>
+          <%= link_to t('background_jobs'), '/jobs', class: 'text-base hover:bg-base-300', data: { turbo: false } %>
         </li>
       <% end %>
     </ul>
