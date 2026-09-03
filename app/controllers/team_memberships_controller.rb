@@ -35,7 +35,8 @@ class TeamMembershipsController < ApplicationController
   private
 
   def authorize_admin
-    return if current_user.admin?
+    return if current_user.super_admin?
+    return if current_user.admin? && current_user.can_access_setting?('teams')
 
     redirect_to root_path, alert: I18n.t('not_authorized')
   end
