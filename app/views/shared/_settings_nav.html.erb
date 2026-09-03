@@ -43,9 +43,7 @@
           <%= link_to t('users'), settings_users_path, class: 'text-base hover:bg-base-300' %>
         </li>
       <% end %>
-      <% if current_user.super_admin? ||
-            current_user.can_access_setting?('folder_permissions') ||
-            current_account.template_folders.active.exists?(author_id: current_user.id) %>
+      <% if current_user.super_admin? || current_user.can_access_setting?('folder_permissions') %>
         <li>
           <%= link_to t('folder_permissions'), settings_folder_permissions_path, class: 'text-base hover:bg-base-300' %>
         </li>

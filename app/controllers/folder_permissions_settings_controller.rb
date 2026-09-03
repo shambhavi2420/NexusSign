@@ -15,7 +15,6 @@ class FolderPermissionsSettingsController < ApplicationController
 
   def authorize_access
     return if folder_permissions_admin?
-    return if current_account.template_folders.active.exists?(author_id: current_user.id)
 
     redirect_to root_path, alert: I18n.t('not_authorized')
   end
@@ -25,13 +24,10 @@ class FolderPermissionsSettingsController < ApplicationController
   end
 
   def manageable_folders
+    # Access is restricted to super admins and admins granted the
+    # folder_permissions section (see authorize_access), so all active folders
+    # in the account are manageable here.
     scope = current_account.template_folders.active.order(:name)
-
-    scope = if folder_permissions_admin?
-              scope
-            else
-              scope.where(author_id: current_user.id)
-            end
 
     # Only include folders that contain active templates (directly or in subfolders)
     templates_scope = current_account.templates.active
