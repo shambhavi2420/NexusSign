@@ -452,6 +452,21 @@
     </label>
   </li>
   <li
+    v-if="field.type === 'candidatessn'"
+    @click.stop
+  >
+    <label class="cursor-pointer py-1.5">
+      <input
+        :checked="!!field.preferences?.mask"
+        type="checkbox"
+        :disabled="!editable"
+        class="toggle toggle-xs"
+        @change="[field.preferences ||= {}, $event.target.checked ? field.preferences.mask = true : delete field.preferences.mask, save()]"
+      >
+      <span class="label-text">{{ t('mask') }}</span>
+    </label>
+  </li>
+  <li
     v-if="withPrefillable && ['text', 'number', 'cells', 'date', 'checkbox', 'select', 'radio', 'phone'].includes(field['type'])"
     @click.stop
   >
