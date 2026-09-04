@@ -451,21 +451,43 @@
       <span class="label-text">{{ t('read_only') }}</span>
     </label>
   </li>
-  <li
+  <div
     v-if="field.type === 'candidatessn'"
+    class="py-1.5 px-1 relative"
     @click.stop
   >
-    <label class="cursor-pointer py-1.5">
-      <input
-        :checked="!!field.preferences?.mask"
-        type="checkbox"
-        :disabled="!editable"
-        class="toggle toggle-xs"
-        @change="[field.preferences ||= {}, $event.target.checked ? field.preferences.mask = true : delete field.preferences.mask, save()]"
+    <select
+      :disabled="!editable"
+      class="select select-bordered select-xs font-normal w-full max-w-xs !h-7 !outline-0 bg-transparent"
+      @change="onChangeMask"
+    >
+      <option
+        value="none"
+        :selected="!field.preferences?.mask"
       >
-      <span class="label-text">{{ t('mask') }}</span>
+        {{ t('no_masking') }}
+      </option>
+      <option
+        value="full"
+        :selected="field.preferences?.mask === true"
+      >
+        {{ t('mask_full') }}
+      </option>
+      <option
+        value="last4"
+        :selected="field.preferences?.mask === -4"
+      >
+        {{ t('mask_except_last_4') }}
+      </option>
+    </select>
+    <label
+      :style="{ backgroundColor }"
+      class="absolute -top-1 left-2.5 px-1 h-4"
+      style="font-size: 8px"
+    >
+      {{ t('mask') }}
     </label>
-  </li>
+  </div>
   <li
     v-if="withPrefillable && ['text', 'number', 'cells', 'date', 'checkbox', 'select', 'radio', 'phone'].includes(field['type'])"
     @click.stop
@@ -744,6 +766,19 @@ export default {
         this.selectedValidation = ''
 
         delete this.field.validation
+      }
+
+      this.save()
+    },
+    onChangeMask (event) {
+      this.field.preferences ||= {}
+
+      if (event.target.value === 'full') {
+        this.field.preferences.mask = true
+      } else if (event.target.value === 'last4') {
+        this.field.preferences.mask = -4
+      } else {
+        delete this.field.preferences.mask
       }
 
       this.save()
