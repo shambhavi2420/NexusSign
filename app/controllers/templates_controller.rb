@@ -56,10 +56,11 @@ class TemplatesController < ApplicationController
 
       @template = Templates::Clone.call(@base_template, author: current_user,
                                                         name: params.dig(:template, :name),
-                                                        folder_name: params[:folder_name])
+                                                        folder_name: params[:folder_name],
+                                                        account: current_account)
     else
       @template.author = current_user
-      @template.folder = TemplateFolders.find_or_create_by_name(current_user, params[:folder_name])
+      @template.folder = TemplateFolders.find_or_create_by_name(current_user, params[:folder_name], current_account)
     end
 
     if params[:account_id].present? && authorized_clone_account_id?(params[:account_id])
@@ -134,8 +135,13 @@ class TemplatesController < ApplicationController
   end
 
   def authorized_clone_account_id?(account_id)
-    true_user.account_id.to_s == account_id.to_s ||
-      true_user.account.linked_accounts.accessible_by(current_ability).exists?(id: account_id)
+    return true if true_user.account_id.to_s == account_id.to_s
+
+    # In Standard Mode, cross-company cloning (via linked accounts) is disabled.
+    # See .kiro/specs/standard-productized-mode (Requirement 5.3).
+    return false unless Docuseal.cross_account_sharing_allowed?(true_user.account)
+
+    true_user.account.linked_accounts.accessible_by(current_ability).exists?(id: account_id)
   end
 
   def maybe_redirect_to_template(template)

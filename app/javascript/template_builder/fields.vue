@@ -230,6 +230,7 @@
 <script>
 import Field from './field'
 import FieldType from './field_type'
+import { filterStandardModeFieldTypes } from './product_mode_field_types'
 import FieldSubmitter from './field_submitter'
 import { IconLock, IconCirclePlus } from '@tabler/icons-vue'
 import IconDrag from './icon_drag'
@@ -244,7 +245,7 @@ export default {
     IconDrag,
     IconLock
   },
-  inject: ['save', 'backgroundColor', 'withPhone', 'withVerification', 'withPayment', 't', 'fieldsDragFieldRef'],
+  inject: ['save', 'backgroundColor', 'withPhone', 'withVerification', 'withPayment', 't', 'fieldsDragFieldRef', 'standardMode'],
   props: {
     fields: {
       type: Array,
@@ -356,13 +357,17 @@ export default {
     },
     fieldIconsSorted () {
       if (this.fieldTypes.length) {
-        return this.fieldTypes.reduce((acc, type) => {
+        const entries = this.fieldTypes.reduce((acc, type) => {
           acc[type] = this.fieldIcons[type]
 
           return acc
         }, {})
+
+        return filterStandardModeFieldTypes(entries, this.standardMode)
       } else {
-        return Object.fromEntries(Object.entries(this.fieldIcons).filter(([key]) => !this.skipTypes.includes(key)))
+        const entries = Object.fromEntries(Object.entries(this.fieldIcons).filter(([key]) => !this.skipTypes.includes(key)))
+
+        return filterStandardModeFieldTypes(entries, this.standardMode)
       }
     },
     submitterFields () {

@@ -201,7 +201,7 @@ module Templates
         pdf_fields
       end
 
-      apply_smart_field_mapping(fields)
+      apply_smart_field_mapping(fields, template.account)
     end
 
     FIELD_NAME_MAPPINGS = {
@@ -215,7 +215,7 @@ module Templates
                    type: 'initials', name: 'Initials' }
     }.freeze
 
-    def apply_smart_field_mapping(fields)
+    def apply_smart_field_mapping(fields, account = nil)
       fields.map do |field|
         # Skip fields that already have a custom type (set by FindAcroFields)
         next field if field['type'] != 'text'
@@ -225,9 +225,12 @@ module Templates
         matched = FIELD_NAME_MAPPINGS.values.find { |mapping| field_name.match?(mapping[:pattern]) }
 
         if matched
-          field.merge(
-            'type' => matched[:type],
-            'name' => matched[:name]
+          Templates::ProductModeFieldTypes.normalize_field(
+            field.merge(
+              'type' => matched[:type],
+              'name' => matched[:name]
+            ),
+            account
           )
         else
           field

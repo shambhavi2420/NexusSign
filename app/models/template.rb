@@ -207,6 +207,11 @@ template = create!(
     }.compact
   end
   
+  # Standard (productized) mode: downgrade candidate/signer-name custom types to
+  # plain text so healthcare fields are never created from tag-based imports.
+  # See .kiro/specs/standard-productized-mode (Requirements 6, 7).
+  template_fields = Templates::ProductModeFieldTypes.normalize_fields(template_fields, account)
+
   # Update template with schema and fields
   template.update!(
     schema: schema,

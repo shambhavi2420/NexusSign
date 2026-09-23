@@ -55,7 +55,12 @@ class TemplatesDashboardController < ApplicationController
       default_folder = current_account.default_template_folder
 
       if TemplateFolderPermissions.can_view?(current_user, default_folder)
-        if Docuseal.multitenant? ? current_account.testing? : current_account.linked_account_account
+        # In Standard Mode, never pull in shared/linked/testing templates or the
+        # share-to-all-accounts (ALL_ID) broadcast — show only this company's
+        # own Default-folder templates.
+        # See .kiro/specs/standard-productized-mode (Requirement 5.2, 5.4).
+        if Docuseal.cross_account_sharing_allowed?(current_account) &&
+           (Docuseal.multitenant? ? current_account.testing? : current_account.linked_account_account)
           shared_account_ids = [current_user.account_id]
           shared_account_ids << TemplateSharing::ALL_ID if !Docuseal.multitenant? && !current_account.testing?
 

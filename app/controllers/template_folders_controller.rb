@@ -51,7 +51,9 @@ class TemplateFoldersController < ApplicationController
   def edit; end
 
   def update
-    if params[:template_folder]&.key?('api_visible')
+    # In Standard Mode the "Visible on Nexus" toggle does not apply — ignore any
+    # api_visible param. See .kiro/specs/standard-productized-mode (Req 8.4).
+    if !Docuseal.standard_mode?(current_account) && params[:template_folder]&.key?('api_visible')
       if @template_folder.update(api_visible: template_folder_params[:api_visible])
         redirect_to folder_path(@template_folder), notice: I18n.t('folder_has_been_updated')
       else
@@ -78,7 +80,9 @@ class TemplateFoldersController < ApplicationController
   end
 
   def template_folder_params
-    params.require(:template_folder).permit(:name, :api_visible)
+    permitted = Docuseal.standard_mode?(current_account) ? %i[name] : %i[name api_visible]
+
+    params.require(:template_folder).permit(*permitted)
   end
 
   def authorize_admin_for_edit

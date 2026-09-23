@@ -103,7 +103,9 @@ module Accounts
 
   def load_signing_pkcs(account)
     cert_data =
-      if Docuseal.multitenant?
+      if Docuseal.per_company_config_isolation?
+        # Isolated deployments (multitenant or Standard Mode): resolve only this
+        # company's signing cert, never another account's.
         data = EncryptedConfig.find_by(account:, key: EncryptedConfig::ESIGN_CERTS_KEY)&.value
 
         return Docuseal.default_pkcs if data.blank?
@@ -133,7 +135,9 @@ module Accounts
     else
       url = EncryptedConfig.find_by(account:, key: EncryptedConfig::TIMESTAMP_SERVER_URL_KEY)&.value
 
-      unless Docuseal.multitenant?
+      # In a partitioned deployment (Standard Mode), never fall back to the
+      # first account's timeserver — each company resolves its own.
+      unless Docuseal.per_company_config_isolation?
         url ||=
           Account.order(:id).first.encrypted_configs.find_by(key: EncryptedConfig::TIMESTAMP_SERVER_URL_KEY)&.value
       end
@@ -144,7 +148,9 @@ module Accounts
 
   def load_trusted_certs(account)
     cert_data =
-      if Docuseal.multitenant?
+      if Docuseal.per_company_config_isolation?
+        # Isolated deployments: use this company's certs merged over the global
+        # CERTS, never another account's certs.
         value = EncryptedConfig.find_by(account:, key: EncryptedConfig::ESIGN_CERTS_KEY)&.value || {}
 
         Docuseal::CERTS.merge(value)

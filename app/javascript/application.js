@@ -170,6 +170,7 @@ safeRegisterElement('template-builder', class extends HTMLElement {
       withReplaceAndCloneUpload: true,
       currencies: (this.dataset.currencies || '').split(',').filter(Boolean),
       acceptFileTypes: this.dataset.acceptFileTypes,
+      productMode: this.dataset.productMode || 'healthcare',
       showTourStartForm: this.dataset.showTourStartForm === 'true'
     })
 

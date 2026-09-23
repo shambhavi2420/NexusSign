@@ -1,0 +1,55 @@
+<div class="flex flex-wrap space-y-4 md:flex-nowrap md:space-y-0">
+  <%= render 'shared/settings_nav' %>
+  <div class="flex-grow max-w-xl mx-auto">
+    <h1 class="text-4xl font-bold mb-4"><%= t('product_mode') %></h1>
+
+    <p class="text-base text-base-content/70 mb-2"><%= t('product_mode_description') %></p>
+    <p class="text-sm text-base-content/60 mb-6">
+      <%= t('product_mode_current_company', company: @company&.name) %>
+      <% unless @is_platform %>
+        · <%= t('product_mode_platform_default', mode: t("product_mode_#{@default_mode}")) %>
+      <% end %>
+    </p>
+
+    <% selected = @is_platform ? @effective_mode : (@override || ProductModeSettingsController::INHERIT) %>
+
+    <%= form_with url: settings_product_mode_path, method: :patch, html: { autocomplete: 'off', class: 'space-y-4' } do |f| %>
+      <% unless @is_platform %>
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-3 border rounded-lg p-4 <%= 'border-primary' if selected == ProductModeSettingsController::INHERIT %>">
+            <%= radio_button_tag 'product_mode', ProductModeSettingsController::INHERIT, selected == ProductModeSettingsController::INHERIT, class: 'radio radio-primary' %>
+            <span>
+              <span class="block font-semibold"><%= t('product_mode_inherit') %></span>
+              <span class="block text-sm text-base-content/70"><%= t('product_mode_inherit_hint', mode: t("product_mode_#{@default_mode}")) %></span>
+            </span>
+          </label>
+        </div>
+      <% end %>
+
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-3 border rounded-lg p-4 <%= 'border-primary' if selected == Docuseal::HEALTHCARE_MODE %>">
+          <%= radio_button_tag 'product_mode', Docuseal::HEALTHCARE_MODE, selected == Docuseal::HEALTHCARE_MODE, class: 'radio radio-primary' %>
+          <span>
+            <span class="block font-semibold"><%= t('product_mode_healthcare') %></span>
+            <span class="block text-sm text-base-content/70"><%= t('product_mode_healthcare_hint') %></span>
+          </span>
+        </label>
+      </div>
+
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-3 border rounded-lg p-4 <%= 'border-primary' if selected == Docuseal::STANDARD_MODE %>">
+          <%= radio_button_tag 'product_mode', Docuseal::STANDARD_MODE, selected == Docuseal::STANDARD_MODE, class: 'radio radio-primary' %>
+          <span>
+            <span class="block font-semibold"><%= t('product_mode_standard') %></span>
+            <span class="block text-sm text-base-content/70"><%= t('product_mode_standard_hint') %></span>
+          </span>
+        </label>
+      </div>
+
+      <div class="pt-2">
+        <%= f.button button_title(title: t('save'), disabled_with: t('saving')), class: 'base-button' %>
+      </div>
+    <% end %>
+  </div>
+  <div class="w-0 md:w-52"></div>
+</div>

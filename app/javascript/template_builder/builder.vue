@@ -550,6 +550,8 @@ export default {
       locale: this.locale,
       baseFetch: this.baseFetch,
       fieldTypes: this.fieldTypes,
+      productMode: this.productMode,
+      standardMode: this.productMode === 'standard',
       backgroundColor: this.backgroundColor,
       withPhone: this.withPhone,
       withVerification: this.withVerification,
@@ -657,6 +659,11 @@ export default {
       type: Array,
       required: false,
       default: () => []
+    },
+    productMode: {
+      type: String,
+      required: false,
+      default: 'healthcare'
     },
     defaultSubmitters: {
       type: Array,

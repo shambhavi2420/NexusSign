@@ -58,7 +58,7 @@ module Api
 
     def update
       if (folder_name = params[:folder_name] || params.dig(:template, :folder_name))
-        @template.folder = TemplateFolders.find_or_create_by_name(current_user, folder_name)
+        @template.folder = TemplateFolders.find_or_create_by_name(current_user, folder_name, current_account)
       end
 
       Array.wrap(params[:roles].presence || params.dig(:template, :roles).presence).each_with_index do |role, index|

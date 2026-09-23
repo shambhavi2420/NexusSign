@@ -48,6 +48,14 @@
           <%= link_to t('folder_permissions'), settings_folder_permissions_path, class: 'text-base hover:bg-base-300' %>
         </li>
       <% end %>
+      <% if current_user.super_admin? %>
+        <li>
+          <%= link_to t('companies'), companies_path, class: 'text-base hover:bg-base-300' %>
+        </li>
+        <li>
+          <%= link_to t('product_mode'), settings_product_mode_path, class: 'text-base hover:bg-base-300' %>
+        </li>
+      <% end %>
       <% if current_user.super_admin? || current_user.can_access_setting?('teams') %>
         <li>
           <%= link_to t('teams'), settings_teams_path, class: 'text-base hover:bg-base-300' %>

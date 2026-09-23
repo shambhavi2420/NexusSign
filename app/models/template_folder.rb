@@ -41,7 +41,12 @@ class TemplateFolder < ApplicationRecord
   has_many :permitted_users, through: :template_folder_permissions, source: :user
 
   scope :active, -> { where(archived_at: nil) }
-  scope :api_visible, -> { where(api_visible: true) }
+  # In Standard (productized) mode the Nexus `api_visible` flag is a no-op: all
+  # folders are treated as visible so the folders API keeps working without a
+  # Nexus integration. Pass the account so the per-company mode is honored;
+  # without one it falls back to the platform default.
+  # See .kiro/specs/standard-productized-mode (Req 8.2).
+  scope :api_visible, ->(account = nil) { Docuseal.standard_mode?(account) ? all : where(api_visible: true) }
 
   def full_name
     if parent_folder_id?

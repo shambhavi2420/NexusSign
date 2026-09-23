@@ -8,7 +8,7 @@ class TemplatesFoldersController < ApplicationController
   def update
     name = [params[:parent_name], params[:name]].compact_blank.join(' / ')
 
-    @template.folder = TemplateFolders.find_or_create_by_name(current_user, name)
+    @template.folder = TemplateFolders.find_or_create_by_name(current_user, name, current_account)
 
     if @template.save
       redirect_back(fallback_location: template_path(@template), notice: I18n.t('document_template_has_been_moved'))

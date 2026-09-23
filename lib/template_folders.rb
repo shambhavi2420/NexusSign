@@ -74,16 +74,22 @@ module TemplateFolders
     end
   end
 
-  def find_or_create_by_name(author, name)
+  # `account` defaults to the author's account but can be overridden with the
+  # acting company (see ApplicationController#current_account) so that a
+  # Platform Super Admin acting inside a company creates/finds the destination
+  # folder in THAT company, not their own platform account. This keeps a moved
+  # template's folder in the same company as the template.
+  # See .kiro/specs/standard-productized-mode (Requirement 2.3).
+  def find_or_create_by_name(author, name, account = author.account)
     if name.blank? || name == TemplateFolder::DEFAULT_NAME
-      default_folder = author.account.default_template_folder
+      default_folder = account.default_template_folder
 
       # If the Default folder is restricted and the user can't access it,
       # create/use a personal folder instead
       if TemplateFolderPermissions.restricted?(default_folder) &&
          !TemplateFolderPermissions.can_view?(author, default_folder)
-        return author.account.template_folders.create_with(author:)
-                     .find_or_create_by(name: author.full_name.presence || author.email, parent_folder_id: nil)
+        return account.template_folders.create_with(author:)
+                      .find_or_create_by(name: author.full_name.presence || author.email, parent_folder_id: nil)
       end
 
       return default_folder
@@ -92,12 +98,12 @@ module TemplateFolders
     parent_name, name = name.to_s.split(' / ', 2).map(&:squish)
 
     if name.present?
-      parent_folder = author.account.template_folders.create_with(author:)
-                            .find_or_create_by(name: parent_name, parent_folder_id: nil)
+      parent_folder = account.template_folders.create_with(author:)
+                             .find_or_create_by(name: parent_name, parent_folder_id: nil)
     else
       name = parent_name
     end
 
-    author.account.template_folders.create_with(author:).find_or_create_by(name:, parent_folder:)
+    account.template_folders.create_with(author:).find_or_create_by(name:, parent_folder:)
   end
 end

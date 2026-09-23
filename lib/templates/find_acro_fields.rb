@@ -90,7 +90,7 @@ module Templates
 
       fields, annots_index = build_fields_with_pages(pdf)
 
-      fields.filter_map do |field|
+      extracted_fields = fields.filter_map do |field|
         areas = Array.wrap(field[:Kids] || field).filter_map do |child_field|
           page = annots_index[child_field.hash]
 
@@ -218,6 +218,14 @@ module Templates
           **field_properties
         }
       end
+
+      # Standard (productized) mode: never emit candidate/signer-name custom
+      # types — downgrade them to plain text. No-op in Healthcare mode. Resolve
+      # the mode for the owning company (the attachment's template's account)
+      # when available; otherwise the platform default applies.
+      # See .kiro/specs/standard-productized-mode (Requirements 6, 7).
+      account = attachment.record.respond_to?(:account) ? attachment.record.account : nil
+      Templates::ProductModeFieldTypes.normalize_fields(extracted_fields, account)
     rescue StandardError => e
       raise if Rails.env.local?
 

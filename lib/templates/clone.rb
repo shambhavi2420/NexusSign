@@ -5,8 +5,12 @@ module Templates
     module_function
 
     # rubocop:disable Metrics, Style/CombinableLoops
-    def call(original_template, author:, external_id: nil, name: nil, folder_name: nil)
-      template = original_template.account.templates.new
+    # `account` is the company the clone should belong to (the acting company for
+    # a Platform Super Admin). Defaults to the source template's account for
+    # backward compatibility. See .kiro/specs/standard-productized-mode (Req 2.3).
+    def call(original_template, author:, external_id: nil, name: nil, folder_name: nil, account: nil)
+      account ||= original_template.account
+      template = account.templates.new
 
       template.external_id = external_id
       template.shared_link = original_template.shared_link
@@ -14,7 +18,7 @@ module Templates
       template.name = name.presence || "#{original_template.name} (#{I18n.t('clone')})"
 
       if folder_name.present?
-        template.folder = TemplateFolders.find_or_create_by_name(author, folder_name)
+        template.folder = TemplateFolders.find_or_create_by_name(author, folder_name, account)
       else
         template.folder_id = original_template.folder_id
       end

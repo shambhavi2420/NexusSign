@@ -52,10 +52,11 @@
 
 <script>
 import { IconTextSize, IconWritingSign, IconCalendarEvent, IconPhoto, IconCheckbox, IconPaperclip, IconSelect, IconCircleDot, IconChecks, IconColumns3, IconPhoneCheck, IconLetterCaseUpper, IconCreditCard, IconRubberStamp, IconSquareNumber1, IconHeading, IconId, IconCalendarCheck } from '@tabler/icons-vue'
+import { filterStandardModeFieldTypes } from './product_mode_field_types'
 
 export default {
   name: 'FiledTypeDropdown',
-  inject: ['withPhone', 'withPayment', 'withVerification', 't', 'fieldTypes'],
+  inject: ['withPhone', 'withPayment', 'withVerification', 't', 'fieldTypes', 'standardMode'],
   props: {
     modelValue: {
       type: String,
@@ -207,13 +208,17 @@ export default {
     },
     fieldIconsSorted () {
       if (this.fieldTypes.length) {
-        return this.fieldTypes.reduce((acc, type) => {
+        const entries = this.fieldTypes.reduce((acc, type) => {
           acc[type] = this.fieldIcons[type]
 
           return acc
         }, {})
+
+        return filterStandardModeFieldTypes(entries, this.standardMode)
       } else {
-        return Object.fromEntries(Object.entries(this.fieldIcons).filter(([key]) => key !== 'heading' && key !== 'datenow'))
+        const entries = Object.fromEntries(Object.entries(this.fieldIcons).filter(([key]) => key !== 'heading' && key !== 'datenow'))
+
+        return filterStandardModeFieldTypes(entries, this.standardMode)
       }
     }
   },

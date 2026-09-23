@@ -6,7 +6,7 @@ module Api
 
     def index
       folders = @template_folders.active
-                                 .api_visible
+                                 .api_visible(current_account)
                                  .preload(:parent_folder)
                                  .order(name: :asc)
 

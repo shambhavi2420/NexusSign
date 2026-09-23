@@ -57,6 +57,15 @@ class ApplicationController < ActionController::Base
     request.session[:impersonated_user_id] = user.uuid
   end
 
+  # Build the ability with the super admin's acting-company context so that,
+  # while acting inside a company, even a super admin's content abilities are
+  # scoped to that company (no cross-company leakage). Regular users are
+  # unaffected (acting_company is nil for them).
+  # See .kiro/specs/standard-productized-mode (Requirement 3.6).
+  def current_ability
+    @current_ability ||= Ability.new(current_user, acting_company&.id)
+  end
+
   def pagy_auto(collection, **keyword_args)
     if current_ability.can?(:manage, :countless)
       pagy_countless(collection, **keyword_args)
@@ -98,9 +107,44 @@ class ApplicationController < ActionController::Base
     sign_in(User.active.order('random()').take) unless signed_in?
   end
 
+  # The company whose data the current request operates within.
+  #
+  # For regular users this is simply their own account. For the Platform Super
+  # Admin it is the sticky "acting company" they selected (session-persisted),
+  # falling back to their own account when none is selected or the selection is
+  # no longer valid (missing/archived). See .kiro/specs/standard-productized-mode
+  # (Requirement 3.6).
   def current_account
-    current_user&.account
+    return current_user&.account unless current_user&.super_admin?
+
+    acting_company || current_user.account
   end
+
+  # The super admin's selected acting company, or nil. Clears an invalid
+  # selection so a stale/archived id can never scope a request.
+  def acting_company
+    return nil unless current_user&.super_admin?
+
+    id = session[:acting_account_id]
+    return nil if id.blank?
+
+    account = Account.active.find_by(id:)
+
+    if account.nil?
+      session.delete(:acting_account_id)
+      return nil
+    end
+
+    account
+  end
+  helper_method :acting_company
+
+  # True when the super admin is acting inside a company other than their own.
+  def acting_as_other_company?
+    company = acting_company
+    company.present? && company.id != current_user&.account_id
+  end
+  helper_method :acting_as_other_company?
 
   def maybe_redirect_to_setup
     redirect_to setup_index_path unless User.exists?

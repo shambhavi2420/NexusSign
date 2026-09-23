@@ -52,6 +52,12 @@ class AccountConfig < ApplicationRecord
   DOCUMENT_FILENAME_FORMAT_KEY = 'document_filename_format'
   POLICY_LINKS_KEY = 'policy_links'
 
+  # Global product-mode selector for the productized deployment. Stored on the
+  # platform (first) account and resolved via Docuseal.product_mode. Values:
+  # 'standard' (productized / non-healthcare) or 'healthcare' (existing Nexus/ATS flow).
+  # See .kiro/specs/standard-productized-mode.
+  PRODUCT_MODE_KEY = 'product_mode'
+
   DEFAULT_VALUES = {
     SUBMITTER_INVITATION_EMAIL_KEY => lambda {
       {

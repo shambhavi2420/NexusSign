@@ -50,9 +50,15 @@ class UsersController < ApplicationController
     attrs = user_params.compact_blank.merge(user_params.slice(:archived_at))
 
     if params.dig(:user, :account_id).present?
-      account = Account.accessible_by(current_ability).find(params.dig(:user, :account_id))
+      # Only allow reassigning to a company the current user is authorized to
+      # manage. A company admin's ability is scoped to their own account, so a
+      # cross-company move is rejected here rather than raising.
+      # See .kiro/specs/standard-productized-mode (Requirement 2.6).
+      account = Account.accessible_by(current_ability).find_by(id: params.dig(:user, :account_id))
 
-      authorize!(:manage, account)
+      if account.nil? || cannot?(:manage, account)
+        return redirect_back fallback_location: settings_users_path, alert: I18n.t('not_authorized')
+      end
 
       @user.account = account
     end

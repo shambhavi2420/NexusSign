@@ -30,7 +30,7 @@ class DataMigrationsController < ApplicationController
     end
 
     folder_name = params[:folder_name].presence
-    folder = TemplateFolders.find_or_create_by_name(current_user, folder_name)
+    folder = TemplateFolders.find_or_create_by_name(current_user, folder_name, current_account)
 
     if files.size <= SYNC_FILE_LIMIT
       # Small batch: process synchronously (fast enough to stay within timeout)

@@ -121,6 +121,13 @@ Rails.application.routes.draw do
   resources :folders, only: %i[show edit update destroy], controller: 'template_folders' do
     resources :permissions, only: %i[index create destroy], controller: 'template_folder_permissions'
   end
+  resource :acting_company, only: %i[create destroy], controller: 'acting_companies'
+  resources :companies, only: %i[index new create] do
+    member do
+      patch :archive
+      patch :unarchive
+    end
+  end
   resources :template_sharings_testing, only: %i[create]
   resources :templates, only: %i[index], controller: 'templates_dashboard'
   resources :submissions_filters, only: %i[show], param: 'name'
@@ -217,6 +224,7 @@ Rails.application.routes.draw do
       resources :memberships, only: %i[create destroy], controller: 'team_memberships'
     end
     resource :folder_permissions, only: %i[show], controller: 'folder_permissions_settings'
+    resource :product_mode, only: %i[show update], controller: 'product_mode_settings'
     resource :personalization, only: %i[show create], controller: 'personalization_settings'
     resources :webhooks, only: %i[index show new create update destroy], controller: 'webhook_settings' do
       post :resend

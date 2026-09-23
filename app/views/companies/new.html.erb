@@ -1,0 +1,44 @@
+<div class="max-w-xl mx-auto px-2">
+  <h1 class="text-4xl font-bold my-6"><%= t('add_company') %></h1>
+
+  <%= form_with url: companies_path, method: :post, html: { class: 'space-y-6' } do %>
+    <div class="space-y-4">
+      <%= fields_for :account, @company do |ff| %>
+        <set-timezone data-input-id="account_timezone"></set-timezone>
+        <%= ff.hidden_field :timezone %>
+        <div class="form-control">
+          <%= ff.label :name, t('company_name'), class: 'label' %>
+          <%= ff.text_field :name, required: true, class: 'base-input' %>
+        </div>
+        <div class="form-control">
+          <%= ff.label :locale, t('language'), class: 'label' %>
+          <%= ff.select :locale, options_for_select(AccountsController::LOCALE_OPTIONS.invert, @company.locale || 'en-US'), {}, class: 'base-select' %>
+        </div>
+      <% end %>
+
+      <div class="divider"><%= t('company_admin') %></div>
+
+      <%= fields_for :admin, @admin do |ff| %>
+        <div class="grid gap-2 md:grid-cols-2 md:gap-4">
+          <div class="form-control">
+            <%= ff.label :first_name, t('first_name'), class: 'label' %>
+            <%= ff.text_field :first_name, required: true, class: 'base-input' %>
+          </div>
+          <div class="form-control">
+            <%= ff.label :last_name, t('last_name'), class: 'label' %>
+            <%= ff.text_field :last_name, required: true, class: 'base-input' %>
+          </div>
+        </div>
+        <div class="form-control">
+          <%= ff.label :email, t('email'), class: 'label' %>
+          <%= ff.email_field :email, required: true, class: 'base-input' %>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <%= button_tag button_title(title: t('create')), class: 'base-button' %>
+      <%= link_to t('cancel'), companies_path, class: 'btn btn-ghost' %>
+    </div>
+  <% end %>
+</div>

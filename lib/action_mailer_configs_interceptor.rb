@@ -27,7 +27,11 @@ module ActionMailerConfigsInterceptor
       return message
     end
 
-    unless Docuseal.multitenant?
+    # Under per-company config isolation (multitenant or Standard Mode) we must
+    # NOT inject a single global SMTP config for every message — that would send
+    # one company's mail using another company's SMTP. Multitenant deployments
+    # resolve SMTP per-account elsewhere; skip the global override here.
+    unless Docuseal.per_company_config_isolation?
       email_configs = EncryptedConfig.order(:account_id).find_by(key: EncryptedConfig::EMAIL_SMTP_KEY)
 
       if email_configs

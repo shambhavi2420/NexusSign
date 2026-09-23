@@ -1,0 +1,42 @@
+<div class="max-w-4xl mx-auto px-2">
+  <div class="flex items-center justify-between my-6">
+    <h1 class="text-4xl font-bold"><%= t('companies') %></h1>
+    <%= link_to t('add_company'), new_company_path, class: 'base-button' %>
+  </div>
+
+  <div class="overflow-x-auto border rounded-lg">
+    <table class="table">
+      <thead>
+        <tr>
+          <th><%= t('company_name') %></th>
+          <th><%= t('users') %></th>
+          <th><%= t('status') %></th>
+          <th class="text-right"><%= t('actions') %></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @companies.each do |company| %>
+          <tr class="<%= 'opacity-60' if company.archived_at? %>">
+            <td class="font-medium"><%= company.name %></td>
+            <td><%= company.users.active.where.not(role: 'integration').count %></td>
+            <td>
+              <% if company.archived_at? %>
+                <span class="badge badge-error badge-outline"><%= t('archived') %></span>
+              <% else %>
+                <span class="badge badge-success badge-outline"><%= t('active') %></span>
+              <% end %>
+            </td>
+            <td class="text-right space-x-1 whitespace-nowrap">
+              <% unless company.archived_at? %>
+                <%= button_to t('enter'), acting_company_path, params: { account_id: company.id }, method: :post, class: 'btn btn-xs btn-outline' %>
+                <%= button_to t('archive'), archive_company_path(company), method: :patch, class: 'btn btn-xs btn-ghost text-error', data: { turbo_confirm: t('are_you_sure') } %>
+              <% else %>
+                <%= button_to t('restore'), unarchive_company_path(company), method: :patch, class: 'btn btn-xs btn-ghost' %>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
