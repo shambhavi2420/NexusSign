@@ -104,15 +104,18 @@ module Submissions
     expire_at = params[:expire_at].presence || Templates.build_default_expire_at(template)
 
     parse_emails(emails, user).uniq.map do |email|
+      # Submission/submitter belong to the TEMPLATE's company, not the creating
+      # user's account (a super admin acting across companies would otherwise
+      # mis-stamp them). See .kiro/specs/standard-productized-mode.
       submission = template.submissions.new(created_by_user: user,
-                                            account_id: user.account_id,
+                                            account_id: template.account_id,
                                             source:,
                                             expire_at:,
                                             template_submitters: template.submitters)
 
       submission.submitters.new(email: normalize_email(email),
                                 uuid: template.submitters.first['uuid'],
-                                account_id: user.account_id,
+                                account_id: template.account_id,
                                 preferences:,
                                 sent_at: mark_as_sent ? Time.current : nil)
 

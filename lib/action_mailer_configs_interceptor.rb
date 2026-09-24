@@ -32,18 +32,50 @@ module ActionMailerConfigsInterceptor
     # one company's mail using another company's SMTP. Multitenant deployments
     # resolve SMTP per-account elsewhere; skip the global override here.
     unless Docuseal.per_company_config_isolation?
-      email_configs = EncryptedConfig.order(:account_id).find_by(key: EncryptedConfig::EMAIL_SMTP_KEY)
+      # Resolve SMTP/from for the SENDING company (from message metadata), not
+      # blindly the first account — otherwise every company's mail would show
+      # the first account's name. Fall back to the first account's SMTP for
+      # delivery when the sending company has none configured.
+      sending_account = account_from_message(message)
+
+      email_configs = EncryptedConfig.find_by(account: sending_account, key: EncryptedConfig::EMAIL_SMTP_KEY) if sending_account
+      email_configs ||= EncryptedConfig.order(:account_id).find_by(key: EncryptedConfig::EMAIL_SMTP_KEY)
 
       if email_configs
         message.delivery_method(:smtp, build_smtp_configs_hash(email_configs))
 
-        message.from = %("#{email_configs.account.name.to_s.delete('"')}" <#{email_configs.value['from_email']}>)
+        # Prefer the sending company's name for the display name so the "From"
+        # reflects the actual company; fall back to the SMTP config's account.
+        from_name = (sending_account&.name || email_configs.account.name).to_s.delete('"')
+        message.from = %("#{from_name}" <#{email_configs.value['from_email']}>)
       else
         message.delivery_method(:test)
       end
     end
 
     message
+  end
+
+  # Derives the sending company (Account) from the message metadata that the
+  # mailers attach (record_id/record_type). Returns nil if it can't resolve.
+  def account_from_message(message)
+    metadata = message.instance_variable_get(:@message_metadata)
+    return nil if metadata.blank?
+
+    record_type = metadata['record_type']
+    record_id = metadata['record_id']
+    return nil if record_type.blank? || record_id.blank?
+
+    record = record_type.safe_constantize&.find_by(id: record_id)
+    return nil unless record
+
+    if record.respond_to?(:account)
+      record.account
+    elsif record.respond_to?(:account_id)
+      Account.find_by(id: record.account_id)
+    end
+  rescue StandardError
+    nil
   end
 
   def build_smtp_configs_hash(email_configs)

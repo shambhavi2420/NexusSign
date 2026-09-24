@@ -20,7 +20,10 @@ module Submissions
 
         submission = template.submissions.new(
           created_by_user: user, source:,
-          account_id: user.account_id,
+          # The submission belongs to the TEMPLATE's company, not the creating
+          # user's account (a super admin acting across companies has their own
+          # account_id, which would otherwise mis-stamp the submission).
+          account_id: template.account_id,
           preferences: set_submission_preferences,
           name: with_template ? attrs[:name] : (attrs[:name].presence || template.name),
           variables: attrs[:variables] || {},
@@ -312,7 +315,8 @@ module Submissions
           email:,
           phone: (attrs[:phone] || values[phone_field_uuid]).to_s.gsub(/[^0-9+]/, ''),
           name: attrs[:name],
-          account_id: user.account_id,
+          # Match the submission's company (template owner), not the creating user's account.
+          account_id: submission.account_id,
           external_id: attrs[:external_id].presence || attrs[:application_key],
           completed_at: attrs[:completed].present? ? Time.current : nil,
           values: values.except(phone_field_uuid),
