@@ -214,6 +214,7 @@ en: &en
   save: Save
   saving: Saving
   changes_have_been_saved: Changes have been saved.
+  powered_by_laboredge_html: '© Copyright %{year} NexusSIGN · Powered by LaborEdge · All Rights Reserved'
   product_mode: Product Mode
   product_mode_description: Choose how this company behaves. Standard is the productized, non-healthcare experience; Healthcare keeps the Nexus ATS field types and integrations. Each company can set its own mode.
   product_mode_current_company: 'Setting mode for: %{company}'
