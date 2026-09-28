@@ -97,131 +97,158 @@ class Template < ApplicationRecord
       self.folder = default_folder
     end
   end
+  # Builds a template from a tag-based PDF for the standardized /from_pdf API.
+  #
+  # `submitters_array` is the caller-provided list of real signers (each a hash
+  # with at least :email and :role), matching the /custom_submissions contract.
+  # The template's submitter entries are derived from these (role => name), and
+  # parsed tag fields are bound to a submitter by matching the tag's :role to a
+  # submitter :role. Roleless fields fall to the first submitter.
+  #
+  # When the PDF contains NO tags, we fall back to PdfSignatureBoxes: one
+  # signature + date box per submitter is drawn and used as the fields (the same
+  # behavior as /custom_submissions).
+  #
+  # Returns the persisted Template. The caller runs the shared submission flow.
+  def self.create_from_pdf_tags(account:, author:, name:, pdf_blob:, parsed_data:, submitters_array:)
+    parsed_fields = parsed_data[:fields] || []
+    tag_positions = parsed_data[:tag_positions] || []
+    has_tags      = parsed_fields.any?
 
+    # One template-submitter entry per real signer; role becomes the name so it
+    # matches how the standardized submission flow resolves submitters by role.
+    template_submitters = submitters_array.map do |s|
+      { 'name' => s[:role], 'uuid' => SecureRandom.uuid }
+    end
 
-# Replace the entire create_from_pdf_tags method in app/models/template.rb
+    # Key submitters by a whitespace/case-normalized role so tag roles match
+    # even when PDF text extraction mangles spacing (e.g. "Signer 1" -> "Signer1").
+    role_to_uuid = template_submitters.index_by { |ts| normalize_role(ts['name']) }
+    first_uuid   = template_submitters.first&.fetch('uuid')
 
-def self.create_from_pdf_tags(account:, author:, name:, pdf_blob:, parsed_data:,folder: nil)
-  fields = parsed_data[:fields]
-  submitters = parsed_data[:submitters]
-  tag_positions = parsed_data[:tag_positions]
-  
-  # Ensure we have at least one submitter
-  if submitters.empty?
-    submitters = [{ name: 'First Party', uuid: SecureRandom.uuid }]
-  end
-  
-  # Build submitters array
-  template_submitters = submitters.map { |s| { 'name' => s[:name], 'uuid' => s[:uuid] } }
-  
-folder = TemplateFolder.find_or_create_by!(account_id: account.id, name: 'Tag Based Requests')
+    folder = TemplateFolder.create_with(author: author)
+                           .find_or_create_by!(account_id: account.id, name: 'Tag Based Requests')
 
-template = create!(
-  account: account,
-  author: author,
-  name: name,
-  folder: folder,
-  submitters: template_submitters,
-  schema: [],
-  fields: [],
-  source: 'api'
-)  
-  # Process PDF: remove tags and create clean version
-  input_tempfile = Tempfile.new(['input', '.pdf'], encoding: 'ascii-8bit')
-  input_tempfile.binmode
-  input_tempfile.write(pdf_blob)
-  input_tempfile.rewind
-  
-  output_tempfile = Tempfile.new(['output', '.pdf'], encoding: 'ascii-8bit')
-  output_tempfile.binmode
-  
-  # Remove tags by overlaying white rectangles
-  if tag_positions.any?
-    PdfFieldParser.remove_tags_and_add_fields(
-      input_tempfile.path,
-      output_tempfile.path,
-      parsed_data
+    template = create!(
+      account:     account,
+      author:      author,
+      name:        name,
+      folder:      folder,
+      submitters:  template_submitters,
+      schema:      [],
+      fields:      [],
+      source:      'api',
+      preferences: { 'submitters_order' => 'preserved' }
     )
-    output_tempfile.rewind
-    final_pdf_content = output_tempfile.read
-  else
-    final_pdf_content = pdf_blob
-  end
-  
-  # Create uploaded file for attachment
-  final_tempfile = Tempfile.new(['final', '.pdf'], encoding: 'ascii-8bit')
-  final_tempfile.binmode
-  final_tempfile.write(final_pdf_content)
-  final_tempfile.rewind
-  
-  uploaded_file = ActionDispatch::Http::UploadedFile.new(
-    tempfile: final_tempfile,
-    filename: "#{name}.pdf",
-    type: 'application/pdf'
-  )
-  
-  # Use existing attachment creation logic
-  documents = Templates::CreateAttachments.call(
-    template, 
-    { files: [uploaded_file] }, 
-    extract_fields: false
-  )
-  
-  attachment_uuid = documents.first.uuid
-  
-  # Build schema with actual attachment UUID
-  schema = documents.map { |doc| { 'attachment_uuid' => doc.uuid, 'name' => doc.filename.base } }
-  
-  # Build template fields with actual attachment_uuid
-  template_fields = fields.map do |field|
-    # Find submitter UUID for this field
-    submitter_uuid = if field[:role].present?
-      submitters.find { |s| s[:name] == field[:role] }&.dig(:uuid)
-    else
-      submitters.first[:uuid]
-    end
-    
-    # Build areas with the actual attachment_uuid
-    areas = field[:areas].map do |area|
-      {
-        'x' => area[:x],
-        'y' => area[:y],
-        'w' => area[:w],
-        'h' => area[:h],
-        'page' => area[:page],
-        'attachment_uuid' => attachment_uuid
-      }
-    end
-    
-    {
-      'uuid' => field[:uuid],
-      'name' => field[:name],
-      'type' => field[:type],
-      'required' => field[:required],
-      'readonly' => field[:readonly],
-      'submitter_uuid' => submitter_uuid,
-      'default_value' => field[:default_value],
-      'options' => field[:options],
-      'preferences' => field[:preferences] || {},
-      'areas' => areas
-    }.compact
-  end
-  
-  # Update template with schema and fields
-  template.update!(
-    schema: schema,
-    fields: template_fields
-  )
-  
-  # Cleanup
-  input_tempfile.close
-  input_tempfile.unlink
-  output_tempfile.close
-  output_tempfile.unlink
-  final_tempfile.close
-  final_tempfile.unlink
-  
-  template
-end
 
+    # Produce the final PDF: erase tags when present, otherwise draw signature
+    # boxes for a tag-less document.
+    box_layout = []
+
+    final_pdf_content =
+      if has_tags || tag_positions.any?
+        erase_pdf_tags(pdf_blob, parsed_data)
+      else
+        drawn_pdf, _total_pages, box_layout =
+          PdfSignatureBoxes.call(pdf_blob, submitters_array)
+        drawn_pdf
+      end
+
+    final_tempfile = Tempfile.new(['final', '.pdf'], encoding: 'ascii-8bit')
+    final_tempfile.binmode
+    final_tempfile.write(final_pdf_content)
+    final_tempfile.rewind
+
+    uploaded_file = ActionDispatch::Http::UploadedFile.new(
+      tempfile: final_tempfile,
+      filename: "#{name}.pdf",
+      type:     'application/pdf'
+    )
+
+    documents = Templates::CreateAttachments.call(
+      template, { files: [uploaded_file] }, extract_fields: false
+    )
+
+    attachment_uuid = documents.first.uuid
+    schema          = documents.map { |doc| { 'attachment_uuid' => doc.uuid, 'name' => doc.filename.base } }
+
+    template_fields =
+      if has_tags
+        build_tag_fields(parsed_fields, attachment_uuid, role_to_uuid, first_uuid)
+      else
+        PdfSignatureBoxes.build_box_fields(box_layout, template_submitters, attachment_uuid)
+      end
+
+    template.update!(schema: schema, fields: template_fields)
+
+    template
+  ensure
+    final_tempfile&.close
+    final_tempfile&.unlink
+  end
+
+  # Overlays white rectangles over detected tags and returns the cleaned PDF
+  # binary. Kept private-ish (class method) so create_from_pdf_tags stays lean.
+  def self.erase_pdf_tags(pdf_blob, parsed_data)
+    input_tempfile  = Tempfile.new(['input', '.pdf'], encoding: 'ascii-8bit')
+    output_tempfile = Tempfile.new(['output', '.pdf'], encoding: 'ascii-8bit')
+
+    input_tempfile.binmode
+    input_tempfile.write(pdf_blob)
+    input_tempfile.rewind
+    output_tempfile.binmode
+
+    PdfFieldParser.remove_tags_and_add_fields(input_tempfile.path, output_tempfile.path, parsed_data)
+    output_tempfile.rewind
+    output_tempfile.read
+  ensure
+    input_tempfile&.close
+    input_tempfile&.unlink
+    output_tempfile&.close
+    output_tempfile&.unlink
+  end
+
+  # Normalizes a role string for tolerant matching: lowercased, all whitespace
+  # removed. So "Signer 1", "signer 1", and a space-stripped "Signer1" all match.
+  def self.normalize_role(role)
+    role.to_s.downcase.gsub(/\s+/, '')
+  end
+
+  # Maps parsed tag fields into template field hashes, binding each to a
+  # submitter by role (roleless -> first submitter) and stamping the real
+  # attachment_uuid onto every area.
+  def self.build_tag_fields(parsed_fields, attachment_uuid, role_to_uuid, first_uuid)
+    parsed_fields.map do |field|
+      submitter_uuid =
+        if field[:role].present?
+          role_to_uuid[normalize_role(field[:role])]&.fetch('uuid') || first_uuid
+        else
+          first_uuid
+        end
+
+      areas = field[:areas].map do |area|
+        {
+          'x'               => area[:x],
+          'y'               => area[:y],
+          'w'               => area[:w],
+          'h'               => area[:h],
+          'page'            => area[:page],
+          'attachment_uuid' => attachment_uuid
+        }
+      end
+
+      {
+        'uuid'           => field[:uuid],
+        'name'           => field[:name],
+        'type'           => field[:type],
+        'required'       => field[:required],
+        'readonly'       => field[:readonly],
+        'submitter_uuid' => submitter_uuid,
+        'default_value'  => field[:default_value],
+        'options'        => field[:options],
+        'preferences'    => field[:preferences] || {},
+        'areas'          => areas
+      }.compact
+    end
+  end
 end

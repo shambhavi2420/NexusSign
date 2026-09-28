@@ -10,6 +10,10 @@ require 'hexapdf'
 class PdfFieldParser
   FIELD_TAG_REGEX = /\{\{([^}]+)\}\}/
   SERTIFI_TAG_REGEX = /\[\[([^\]]+)\]\]/
+  # Matches ${...} placeholder tags, e.g. ${CandidateFullName}, ${Signature}.
+  # The inner capture excludes braces and a leading '$' so it can't overlap
+  # with the {{...}} scanner (which also uses a '}' close delimiter).
+  DOLLAR_TAG_REGEX = /\$\{([^{}$]+)\}/
 
   # Maps Sertifi tag patterns to NexusSign field types.
   # Order matters - more specific patterns must come before generic ones.
@@ -48,9 +52,78 @@ class PdfFieldParser
     /\ASFLD:/i              => { type: 'text', name: nil } # Generic SFLD fallback
   }.freeze
 
+  # Maps ${...} placeholder keywords to NexusSign field types.
+  #
+  # Keys are the *normalized* tag name: lowercased with all non-alphanumeric
+  # characters removed, so "${Signature Date}", "${signatureDate}" and
+  # "${SIGNATURE_DATE}" all normalize to "signaturedate" and map identically.
+  #
+  # Two groups:
+  #  * Built-in action fields (signature/initials/date) so a bare
+  #    ${Signature}, ${Initials}, ${SignatureDate} become the right control.
+  #  * Known candidate/signer data fields reuse the SAME custom type strings
+  #    as the Sertifi/SFLD path and field_type.vue, so they autofill identically
+  #    (e.g. via Submitters::MaybeUpdateDefaultValues).
+  #
+  # Anything NOT in this table falls back to a custom `text` field named after
+  # the tag (CamelCase / snake_case is humanized into "Candidate Full Name" etc.),
+  # which covers arbitrary custom tags.
+  DOLLAR_TAG_MAPPINGS = {
+    # Built-in action fields
+    'signature'      => { type: 'signature', name: 'Signature' },
+    'esignature'     => { type: 'signature', name: 'Signature' },
+    'sign'           => { type: 'signature', name: 'Signature' },
+    'initials'       => { type: 'initials',  name: 'Initials' },
+    'initial'        => { type: 'initials',  name: 'Initials' },
+    'signaturedate'  => { type: 'date',      name: 'Date Field 1' },
+    'datesigned'     => { type: 'date',      name: 'Date Field 1' },
+    'date'           => { type: 'date',      name: 'Date Field 1' },
+    'checkbox'       => { type: 'checkbox',  name: 'Checkbox' },
+
+    # Signer identity fields (map to the "Signer" custom types)
+    'signerfullname'      => { type: 'signerfullname',      name: 'Signer Full Name' },
+    'signerfirstname'     => { type: 'signerfirstname',     name: 'Signer First Name' },
+    'signerlastname'      => { type: 'signerlastname',      name: 'Signer Last Name' },
+    'signerprimaryphone'  => { type: 'signerprimaryphone',  name: 'Signer Primary Phone' },
+    'signerphone'         => { type: 'signerprimaryphone',  name: 'Signer Primary Phone' },
+    'signeremail'         => { type: 'signeremail',         name: 'Signer Email' },
+
+    # Candidate identity fields. Per the existing business rule, name parts map
+    # to the "Signer" custom types (they are the party signing), while the rest
+    # of the candidate data maps to "Candidate" custom types.
+    'candidatefullname'   => { type: 'signerfullname',  name: 'Signer Full Name' },
+    'candidatename'       => { type: 'signerfullname',  name: 'Signer Full Name' },
+    'candidatefirstname'  => { type: 'signerfirstname', name: 'Signer First Name' },
+    'candidatelastname'   => { type: 'signerlastname',  name: 'Signer Last Name' },
+    'candidateemail'      => { type: 'signeremail',     name: 'Signer Email' },
+    'candidatephone'      => { type: 'signerprimaryphone', name: 'Signer Primary Phone' },
+    'candidateprimaryphone' => { type: 'signerprimaryphone', name: 'Signer Primary Phone' },
+
+    # Candidate data fields
+    'candidatepermanentaddress1' => { type: 'candidatepermanentaddress1', name: 'Candidate Permanent Address 1' },
+    'candidateaddress'           => { type: 'candidatepermanentaddress1', name: 'Candidate Permanent Address 1' },
+    'candidatepermanentcity'     => { type: 'candidatepermanentcity',     name: 'Candidate Permanent City' },
+    'candidatecity'              => { type: 'candidatepermanentcity',     name: 'Candidate Permanent City' },
+    'candidatepermanentstate'    => { type: 'candidatepermanentstate',    name: 'Candidate Permanent State' },
+    'candidatestate'             => { type: 'candidatepermanentstate',    name: 'Candidate Permanent State' },
+    'candidatepermanentzip'      => { type: 'candidatepermanentzip',      name: 'Candidate Permanent Zip' },
+    'candidatezip'               => { type: 'candidatepermanentzip',      name: 'Candidate Permanent Zip' },
+    'candidatessn'               => { type: 'candidatessn',               name: 'Candidate SSN', preferences: { 'mask' => true } },
+    'candidateprimaryprofession' => { type: 'candidateprimaryprofession', name: 'Candidate Primary Profession' },
+    'candidateprofession'        => { type: 'candidateprimaryprofession', name: 'Candidate Primary Profession' },
+    'candidateprimaryspecialty'  => { type: 'candidateprimaryspecialty',  name: 'Candidate Primary Specialty' },
+    'candidatespecialty'         => { type: 'candidateprimaryspecialty',  name: 'Candidate Primary Specialty' },
+    'candidateavailablefrom'     => { type: 'candidateavailablefrom',     name: 'Candidate Available From' },
+    'candidateavailabilitydate'  => { type: 'candidateavailablefrom',     name: 'Candidate Available From' }
+  }.freeze
+
   # Default dimensions for SFLD fields (in PDF points)
   SFLD_DEFAULT_WIDTH = 100
   SFLD_DEFAULT_HEIGHT = 15
+
+  # Default dimensions for ${...} fields (in PDF points)
+  DOLLAR_DEFAULT_WIDTH = 150
+  DOLLAR_DEFAULT_HEIGHT = 15
 
   attr_reader :pdf_path, :parsed_fields, :submitters, :tag_positions
 
@@ -68,6 +141,16 @@ class PdfFieldParser
   # Class-level accessor for parsing Sertifi tag attributes from external callers
   def self.parse_sertifi_attributes(tag_content)
     new('').send(:parse_sertifi_tag_attributes, tag_content)
+  end
+
+  # Class-level test/inspection seam: resolves a ${...} tag's inner content into
+  # a field hash (type/name/preferences/role) without needing a real PDF.
+  # Positions are computed against a nominal 600x800 page.
+  def self.parse_dollar_tag(tag_content, page_width: 600.0, page_height: 800.0)
+    new('').send(
+      :parse_dollar_field_at_position,
+      tag_content, 0, 10.0, 700.0, 100.0, 15.0, page_width, page_height
+    )
   end
 
   def parse
@@ -174,6 +257,33 @@ class PdfFieldParser
         register_submitter(field[:role]) if field[:role]
       end
     end
+
+    # ${...} placeholder tags (e.g. ${CandidateFullName}, ${Signature}).
+    # These are always self-contained on a single line, so they use a simple
+    # per-line scan rather than the cross-line `pending` merge logic used for
+    # the {{...}}/[[...]] formats (whose close delimiters would otherwise
+    # interact with the shared '}' character).
+    scan_lines_for_dollar_tags(lines, page_index) do |tag_content, position|
+      field = parse_dollar_field_at_position(
+        tag_content, page_index, position[:x], position[:y],
+        position[:width], position[:height], page_width, page_height
+      )
+
+      if field
+        @parsed_fields << field
+        register_submitter(field[:role]) if field[:role]
+      end
+    end
+  end
+
+  # Scans each visual line independently for ${...} tags. No cross-line merging
+  # is attempted because these placeholders are short and never word-wrap.
+  def scan_lines_for_dollar_tags(lines, page_index)
+    lines.each do |line|
+      emit_tags_in_chars(line[:chars], page_index, DOLLAR_TAG_REGEX, '${', '}') do |content, position|
+        yield content, position
+      end
+    end
   end
 
   # Groups individual character TextRuns into visual lines based on rounded
@@ -181,7 +291,11 @@ class PdfFieldParser
   # sorted top-to-bottom (descending y, since PDF space has y increasing upward).
   def group_chars_into_lines(chars)
     chars
-      .group_by { |c| c.y.round(1) }
+      # Coerce the key to Float before rounding: some runs report an Integer
+      # y (e.g. 750) and others a Float (750.0) for the same baseline. Those are
+      # numerically equal but NOT eql?, so group_by would otherwise split one
+      # visual line into two buckets (breaking single-line ${...} detection).
+      .group_by { |c| c.y.to_f.round(1) }
       .sort_by { |y, _| -y }
       .map { |y, cs| { y: y, chars: cs.sort_by(&:x) } }
   end
@@ -356,6 +470,96 @@ class PdfFieldParser
     end
 
     field
+  end
+
+  # Parse a ${...} placeholder tag and build a field definition.
+  #
+  # The tag content is the inner name, e.g. "CandidateFullName", "Signature",
+  # "SignatureDate", or an arbitrary custom name. An optional trailing
+  # ";role=..." is supported for assigning the field to a specific submitter,
+  # mirroring the {{...}} convention, though most ${...} tags won't use it.
+  #
+  # Resolution:
+  #   1. Normalize the name (strip a leading '$', lowercase, drop non-alphanumerics).
+  #   2. Look it up in DOLLAR_TAG_MAPPINGS for a known built-in/custom type.
+  #   3. If unknown, create a `text` field named by humanizing the raw tag
+  #      (CamelCase/snake_case -> "Candidate Full Name"), so any custom tag works.
+  def parse_dollar_field_at_position(tag_content, page_index, x, y, tag_width, tag_height, page_width, page_height)
+    # Support an optional ";role=..." (and future ";key=value") suffix.
+    raw_name, *option_parts = tag_content.split(';').map(&:strip)
+    return nil if raw_name.blank?
+
+    options = parse_attributes(option_parts)
+
+    normalized = normalize_dollar_tag_name(raw_name)
+    mapping = DOLLAR_TAG_MAPPINGS[normalized]
+
+    field_type = mapping ? mapping[:type] : 'text'
+    field_name = mapping ? mapping[:name] : humanize_dollar_tag_name(raw_name)
+
+    # Size the field: signatures/initials get larger boxes, everything else a
+    # standard text-width box. Fall back to the measured tag width if bigger.
+    field_width = [tag_width.to_f, estimate_field_width(field_type, page_width)].max
+    field_width = DOLLAR_DEFAULT_WIDTH.to_f if field_width <= 0
+    field_height = estimate_field_height(field_type, page_height)
+    field_height = DOLLAR_DEFAULT_HEIGHT.to_f if field_height <= 0
+
+    # Convert to relative coordinates (0-1), PDF bottom-left -> top-left origin.
+    rel_x = x / page_width
+    rel_y = 1.0 - ((y + field_height) / page_height)
+    rel_w = field_width / page_width
+    rel_h = field_height / page_height
+
+    # Clamp to valid ranges.
+    rel_x = [[rel_x, 0].max, 0.95].min
+    rel_y = [[rel_y, 0].max, 0.95].min
+    rel_w = [[rel_w, 0.02].max, 1 - rel_x].min
+    rel_h = [[rel_h, 0.01].max, 1 - rel_y].min
+
+    field = {
+      uuid: SecureRandom.uuid,
+      name: field_name,
+      type: field_type,
+      required: options['required'] != 'false',
+      readonly: options['readonly'] == 'true',
+      areas: [{
+        x: rel_x,
+        y: rel_y,
+        w: rel_w,
+        h: rel_h,
+        page: page_index
+      }]
+    }
+
+    field[:preferences] = mapping[:preferences].dup if mapping && mapping[:preferences].present?
+    field[:role] = options['role'] if options['role'].present?
+
+    field
+  end
+
+  # Normalizes a ${...} tag name for mapping lookup: lowercases and strips every
+  # non-alphanumeric character so "Signature Date", "signatureDate",
+  # "SIGNATURE_DATE" and "Signature-Date" all collapse to "signaturedate".
+  def normalize_dollar_tag_name(raw_name)
+    raw_name.to_s.sub(/\A\$/, '').downcase.gsub(/[^a-z0-9]/, '')
+  end
+
+  # Turns a raw ${...} tag name into a human-friendly field label by inserting
+  # spaces at CamelCase boundaries and around digits, and treating underscores,
+  # hyphens and dots as separators. E.g. "CandidateFullName" -> "Candidate Full
+  # Name", "candidate_full_name" -> "Candidate Full Name".
+  def humanize_dollar_tag_name(raw_name)
+    spaced = raw_name.to_s
+                     .sub(/\A\$/, '')
+                     .gsub(/[_\-.]+/, ' ')
+                     .gsub(/([a-z\d])([A-Z])/, '\1 \2')
+                     .gsub(/([A-Z]+)([A-Z][a-z])/, '\1 \2')
+                     .squeeze(' ')
+                     .strip
+
+    return raw_name.to_s if spaced.blank?
+
+    spaced.split(' ').map { |word| word[0].upcase + word[1..].to_s }.join(' ')
   end
 
   # Parse Sertifi tag format: "SFLD:FieldName:W=100,H=15,R=True"
