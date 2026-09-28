@@ -10,6 +10,14 @@ module Api
                                  .preload(:parent_folder)
                                  .order(name: :asc)
 
+      # Hide blank folders (no active templates directly or in subfolders) so the
+      # API matches the portal UI, but always keep the Default folder visible.
+      non_empty_folders = TemplateFolders.filter_active_folders(folders, current_account.templates)
+      default_folder    = folders.where(name: TemplateFolder::DEFAULT_NAME)
+
+      folders = folders.where(id: non_empty_folders.select(:id))
+                       .or(folders.where(id: default_folder.select(:id)))
+
       folders = folders.where('name ILIKE ?', "%#{params[:q]}%") if params[:q].present?
 
       render json: {
