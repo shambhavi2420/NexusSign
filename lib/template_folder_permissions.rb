@@ -177,6 +177,42 @@ module TemplateFolderPermissions
     end
   end
 
+  # Copies the parent folder's explicit permission rows onto the child so a
+  # newly created subfolder is accessible to exactly the parent's audience and
+  # nobody else.
+  #
+  # Behavior:
+  #   * Parent unrestricted (no rows): the child is left unrestricted too — if
+  #     everyone can see the parent, everyone can see the child. Nothing to copy.
+  #   * Parent restricted: every explicit user/team permission row on the parent
+  #     is replicated onto the child (idempotently). This makes the child
+  #     restricted to the same set, instead of defaulting to open-to-everyone.
+  #
+  # Owners and admins are intentionally NOT copied as rows — they already get
+  # access via can_view?/node_accessible? regardless. Returns the child folder.
+  def inherit_permissions(child_folder, parent_folder)
+    return child_folder if parent_folder.nil?
+    return child_folder unless restricted?(parent_folder)
+
+    parent_rows = TemplateFolderPermission.where(template_folder_id: parent_folder.id)
+
+    parent_rows.find_each do |row|
+      attrs = { template_folder_id: child_folder.id }
+      attrs[:user_id] = row.user_id if row.user_id.present?
+      attrs[:team_id] = row.team_id if row.team_id.present?
+
+      next unless attrs.key?(:user_id) || attrs.key?(:team_id)
+
+      begin
+        TemplateFolderPermission.find_or_create_by!(attrs)
+      rescue ActiveRecord::RecordNotUnique
+        next
+      end
+    end
+
+    child_folder
+  end
+
   # Returns teams that have permission on this folder.
   def permitted_teams(folder)
     team_ids = TemplateFolderPermission.where(template_folder_id: folder.id)

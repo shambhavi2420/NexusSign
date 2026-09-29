@@ -39,11 +39,44 @@ RSpec.describe PdfFieldParser do
       expect(last[:type]).to eq('signerlastname')
     end
 
-    it 'masks the candidate SSN field' do
+    it 'leaves the candidate SSN unmasked by default' do
       field = described_class.parse_dollar_tag('CandidateSSN')
 
       expect(field[:type]).to eq('candidatessn')
-      expect(field[:preferences]).to eq('mask' => true)
+      expect(field[:preferences].to_h['mask']).to be_nil
+    end
+
+    describe 'the ;mask= option' do
+      it 'masks the whole value with mask=full' do
+        field = described_class.parse_dollar_tag('CandidateSSN;mask=full')
+        expect(field[:preferences]).to eq('mask' => true)
+      end
+
+      it 'masks all but the last 4 with mask=last4' do
+        field = described_class.parse_dollar_tag('CandidateSSN;mask=last4')
+        expect(field[:preferences]).to eq('mask' => -4)
+      end
+
+      it 'removes masking with mask=none' do
+        field = described_class.parse_dollar_tag('CandidateSSN;mask=none')
+        expect(field[:preferences]).to be_nil.or eq({})
+      end
+
+      it 'accepts except_last_4 as an alias' do
+        field = described_class.parse_dollar_tag('CandidateSSN;mask=except_last_4')
+        expect(field[:preferences]).to eq('mask' => -4)
+      end
+
+      it 'leaves the mapped default when the value is unrecognized' do
+        field = described_class.parse_dollar_tag('CandidateSSN;mask=banana')
+        expect(field[:preferences].to_h['mask']).to be_nil
+      end
+
+      it 'can mask an arbitrary custom text field' do
+        field = described_class.parse_dollar_tag('AccountNumber;mask=last4')
+        expect(field[:type]).to eq('text')
+        expect(field[:preferences]).to eq('mask' => -4)
+      end
     end
 
     it 'is case- and separator-insensitive' do
