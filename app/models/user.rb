@@ -79,10 +79,10 @@ class User < ApplicationRecord
   attribute :role, :string, default: ADMIN_ROLE
   attribute :uuid, :string, default: -> { SecureRandom.uuid }
 
-  # Default access list granted to newly created admins.
+  # Default access list granted to admins (on creation-as-admin or promotion).
   DEFAULT_ADMIN_PERMISSIONS = %w[users folder_permissions].freeze
 
-  after_create :assign_default_admin_permissions
+  after_save :assign_default_admin_permissions
 
   scope :active, -> { where(archived_at: nil) }
   scope :archived, -> { where.not(archived_at: nil) }
@@ -168,12 +168,20 @@ class User < ApplicationRecord
 
   private
 
-  # On creation, grant regular admins the default access list (Users + Folder
-  # Permissions) so they can manage users and folder permissions out of the box.
+  # Grants regular admins the default access list (Users + Folder Permissions)
+  # so they can manage users and folder permissions out of the box.
+  #
+  # Fires on save whenever the role just changed to `admin` — covering both
+  # create-as-admin and promotion (editor/viewer -> admin). It only applies the
+  # defaults when the admin has no permissions yet, so it never overwrites an
+  # admin whose access list was already configured.
+  #
   # Super admins are unrestricted (their access list is ignored) and non-admin
-  # roles (editor/viewer) don't use the settings access list, so both are skipped.
+  # roles don't use the settings access list, so both are skipped.
   def assign_default_admin_permissions
     return unless role == ADMIN_ROLE
+    return unless saved_change_to_role?
+    return if admin_permissions.present?
 
     self.admin_permissions = DEFAULT_ADMIN_PERMISSIONS
   end
