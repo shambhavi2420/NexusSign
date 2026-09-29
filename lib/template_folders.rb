@@ -98,6 +98,16 @@ module TemplateFolders
       name = parent_name
     end
 
-    author.account.template_folders.create_with(author:).find_or_create_by(name:, parent_folder:)
+    # Track whether the child is newly created so we only inherit permissions on
+    # creation — never re-adding rows an admin may have deliberately revoked.
+    child = author.account.template_folders.create_with(author:).find_or_initialize_by(name:, parent_folder:)
+    newly_created = child.new_record?
+    child.save! if newly_created
+
+    if newly_created && parent_folder.present?
+      TemplateFolderPermissions.inherit_permissions(child, parent_folder)
+    end
+
+    child
   end
 end

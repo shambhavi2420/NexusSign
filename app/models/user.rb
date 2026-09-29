@@ -79,6 +79,11 @@ class User < ApplicationRecord
   attribute :role, :string, default: ADMIN_ROLE
   attribute :uuid, :string, default: -> { SecureRandom.uuid }
 
+  # Default access list granted to newly created admins.
+  DEFAULT_ADMIN_PERMISSIONS = %w[users folder_permissions].freeze
+
+  after_create :assign_default_admin_permissions
+
   scope :active, -> { where(archived_at: nil) }
   scope :archived, -> { where.not(archived_at: nil) }
   scope :admins, -> { where(role: ADMIN_ROLES) }
@@ -134,7 +139,7 @@ class User < ApplicationRecord
   def sidekiq?
     return true if Rails.env.development?
 
-    super_admin?
+    can_access_setting?('jobs')
   end
 
   def self.sign_in_after_reset_password
@@ -159,5 +164,17 @@ class User < ApplicationRecord
     else
       email
     end
+  end
+
+  private
+
+  # On creation, grant regular admins the default access list (Users + Folder
+  # Permissions) so they can manage users and folder permissions out of the box.
+  # Super admins are unrestricted (their access list is ignored) and non-admin
+  # roles (editor/viewer) don't use the settings access list, so both are skipped.
+  def assign_default_admin_permissions
+    return unless role == ADMIN_ROLE
+
+    self.admin_permissions = DEFAULT_ADMIN_PERMISSIONS
   end
 end

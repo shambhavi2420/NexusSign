@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class UsersController < ApplicationController
+  before_action :authorize_users_access
+
   load_and_authorize_resource :user, only: %i[index edit update destroy]
 
   before_action :build_user, only: %i[new create]
@@ -73,6 +75,17 @@ class UsersController < ApplicationController
   end
 
   private
+
+  # The Users settings page is only for super admins and admins granted the
+  # users section. A regular admin's or editor's instance-level User ability
+  # (manage their own record, used by the Profile page) must not open this
+  # page, so gate it explicitly on the granted section.
+  def authorize_users_access
+    return if current_user.super_admin?
+    return if current_user.admin? && current_user.can_access_setting?('users')
+
+    redirect_to root_path, alert: I18n.t('not_authorized')
+  end
 
   def role_valid?(role)
     return false unless User::ROLES.include?(role)

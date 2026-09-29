@@ -54,11 +54,19 @@ module SettingsSections
       label_key: 'API',
       abilities: [[:manage, AccessToken]]
     },
-    # Data migration is guarded by a custom controller gate rather than a
-    # CanCanCan subject, so it has no abilities. Access is driven purely by
-    # User#can_access_setting?('data_migration').
+    'webhooks' => {
+      label_key: 'webhook_settings',
+      abilities: [[:manage, WebhookUrl]]
+    },
+    # Data migration and background jobs are guarded by custom controller /
+    # route gates rather than a CanCanCan subject, so they have no abilities.
+    # Access is driven purely by User#can_access_setting?(<key>).
     'data_migration' => {
       label_key: 'data_migration',
+      abilities: []
+    },
+    'jobs' => {
+      label_key: 'background_jobs',
       abilities: []
     }
   }.freeze

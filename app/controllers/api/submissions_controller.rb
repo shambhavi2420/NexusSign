@@ -199,107 +199,180 @@ module Api
       render json: { error: e.message }, status: :unprocessable_content
     end
 
+    # =========================================================================
+    # POST /api/submissions/from_pdf
+    #
+    # Standardized to mirror /api/custom_submissions. Accepts a base64 PDF and a
+    # submitters array. If the PDF contains field tags ({{...}}, [[...]], ${...})
+    # they are detected and erased, and fields are placed at the tag positions
+    # (bound to submitters by role). If the PDF has NO tags, one signature+date
+    # box per submitter is drawn at the bottom (shared PdfSignatureBoxes logic).
+    #
+    # Required params:  pdf_base64, submitters[] (each with email + role)
+    # Optional params:  filename, submitters_order, send_email, send_sms,
+    #                   per-submitter name/phone/metadata/external_id/application_key
+    # =========================================================================
     def from_pdf
-      Rails.logger.info "=== FROM_PDF DEBUG START ==="
-      Rails.logger.info "X-Auth-Token: #{request.headers['X-Auth-Token']}"
-      Rails.logger.info "Current User: #{current_user.inspect}"
-      Rails.logger.info "Current User ID: #{current_user&.id}"
-      Rails.logger.info "Current Account: #{current_account.inspect}"
-      Rails.logger.info "Current Account ID: #{current_account&.id}"
-      Rails.logger.info "=== FROM_PDF DEBUG END ==="
-
       authorize!(:create, Submission)
       authorize!(:create, Template)
 
-      unless params[:file].present? || params[:documents]&.first&.dig(:file).present?
-        return render json: { error: 'PDF file is required' }, status: :unprocessable_entity
+      # ------------------------------------------------------------------
+      # 1. Validate request (same contract as custom_submissions)
+      # ------------------------------------------------------------------
+      if params[:pdf_base64].blank?
+        return render json: { error: 'Missing required parameter: pdf_base64' }, status: :bad_request
       end
 
-      file_data = if params[:file].present?
-        params[:file]
-      else
-        params[:documents].first[:file]
+      unless params[:submitters].is_a?(Array) || params[:submitters].respond_to?(:to_unsafe_h)
+        return render json: { error: 'Missing required parameter: submitters (must be an array)' },
+                      status: :bad_request
       end
 
-      pdf_content = if file_data.is_a?(String)
-        Base64.decode64(file_data)
-      else
-        file_data.read
+      submitters_array = Array(params[:submitters]).map do |s|
+        s.respond_to?(:to_unsafe_h) ? s.to_unsafe_h.with_indifferent_access : s.with_indifferent_access
       end
 
-      temp_file = Tempfile.new(['upload', '.pdf'])
+      if submitters_array.empty?
+        return render json: { error: 'Missing required parameter: submitters (must be an array)' },
+                      status: :bad_request
+      end
+
+      if submitters_array.any? { |s| s[:email].blank? }
+        return render json: { error: 'Each submitter must have an email' }, status: :bad_request
+      end
+
+      if submitters_array.any? { |s| s[:role].blank? }
+        return render json: { error: 'Each submitter must have a role' }, status: :bad_request
+      end
+
+      unless current_account&.id && current_user&.id
+        return render json: { error: 'Authentication failed: No valid account found' }, status: :unauthorized
+      end
+
+      # ------------------------------------------------------------------
+      # 2. Parse tags from the PDF
+      # ------------------------------------------------------------------
+      pdf_content = Base64.decode64(params[:pdf_base64])
+
+      temp_file = Tempfile.new(['upload', '.pdf'], encoding: 'ascii-8bit')
       temp_file.binmode
       temp_file.write(pdf_content)
       temp_file.rewind
-
       parsed_data = PdfFieldParser.call(temp_file.path)
-
-      if parsed_data[:fields].empty?
-        temp_file.close
-        temp_file.unlink
-        return render json: { error: 'No field tags found in PDF' }, status: :unprocessable_entity
-      end
-
-      template_name = params[:name] || params[:documents]&.first&.dig(:name) || 'PDF Template'
-
-      template = Template.create_from_pdf_tags(
-        account:     current_account,
-        author:      current_user,
-        name:        template_name,
-        pdf_blob:    pdf_content,
-        parsed_data: parsed_data
-      )
-      template.update!(preferences: (template.preferences || {}).merge('submitters_order' => 'preserved'))
       temp_file.close
       temp_file.unlink
 
-      # Support flat body style (submitter_email at top level) for from_pdf too
-      normalize_flat_submitter_params! if params[:submitter_email].present? && params[:submitters].blank?
+      # ------------------------------------------------------------------
+      # 3. When tags exist and there are multiple submitters, every tag field
+      #    must carry a role so we know which signer it belongs to. Reject
+      #    ambiguous requests with a clear, actionable error.
+      # ------------------------------------------------------------------
+      parsed_fields = parsed_data[:fields] || []
 
-      if params[:submitters].present?
-        params[:template_id] = template.id
-        params[:send_email]  = true unless params.key?(:send_email)
-        params[:send_sms]    = false unless params.key?(:send_sms)
+      if parsed_fields.any? && submitters_array.size > 1
+        roleless = parsed_fields.reject { |f| f[:role].present? }
 
-        submissions = create_submissions(template, params)
-        maybe_enforce_order(submissions) 
+        if roleless.any?
+          names = roleless.map { |f| f[:name] }.uniq.join(', ')
+          return render json: {
+            error: 'Tags without a role were found but multiple submitters were provided. ' \
+                   "Add ;role=<submitter role> to these tags: #{names}"
+          }, status: :unprocessable_entity
+        end
+      end
+
+      template_name = params[:filename].presence || 'PDF Template'
+
+      ActiveRecord::Base.transaction do
+        # ----------------------------------------------------------------
+        # 4. Build the template (tag fields OR drawn boxes when tag-less)
+        # ----------------------------------------------------------------
+        template = Template.create_from_pdf_tags(
+          account:          current_account,
+          author:           current_user,
+          name:             template_name,
+          pdf_blob:         pdf_content,
+          parsed_data:      parsed_data,
+          submitters_array: submitters_array
+        )
+
+        # ----------------------------------------------------------------
+        # 5. Create submissions via the shared standardized flow
+        # ----------------------------------------------------------------
+        global_send_email = params[:send_email] != false
+        global_send_sms   = params[:send_sms] == true
+
+        normalized_submitters = submitters_array.map do |s|
+          submitter_send_email = s.key?(:send_email) ? (s[:send_email] != false && s[:send_email] != 'false') : global_send_email
+          submitter_send_sms   = s.key?(:send_sms) ? (s[:send_sms] == true || s[:send_sms] == 'true') : global_send_sms
+
+          {
+            'email'           => s[:email],
+            'name'            => s[:name].presence,
+            'role'            => s[:role],
+            'phone'           => s[:phone].presence,
+            'external_id'     => s[:external_id].presence,
+            'application_key' => s[:application_key].presence,
+            'metadata'        => s[:metadata].present? ? s[:metadata].to_h : {},
+            'send_email'      => submitter_send_email,
+            'send_sms'        => submitter_send_sms
+          }.compact
+        end
+
+        create_params = ActionController::Parameters.new(
+          template_id:      template.id,
+          submitters:       normalized_submitters,
+          submitters_order: params[:submitters_order] || 'preserved',
+          send_email:       global_send_email,
+          send_sms:         global_send_sms
+        )
+
+        submissions = create_submissions(template, create_params)
+        maybe_enforce_order(submissions)
+
         submissions.each do |submission|
           submission.submitters.each do |submitter|
-            assign_submitter_preferences(submitter, params)
+            assign_submitter_preferences(submitter, create_params)
             Submitters::MaybeUpdateDefaultValues.call(submitter, current_user, fill_now: true)
           end
         end
 
+        # ----------------------------------------------------------------
+        # 6. Fire webhooks, send signature requests, handle completions, reindex
+        # ----------------------------------------------------------------
         WebhookUrls.enqueue_events(submissions, 'submission.created')
         Submissions.send_signature_requests(submissions)
+
+        submissions.each do |submission|
+          submission.submitters.each do |submitter|
+            next unless submitter.completed_at?
+
+            ProcessSubmitterCompletionJob.perform_async(
+              'submitter_id' => submitter.id, 'send_invitation_email' => false
+            )
+          end
+        end
+
         SearchEntries.enqueue_reindex(submissions)
 
-        render json: {
-          template_id:   template.id,
-          template_name: template.name,
-          submissions:   build_create_json(submissions)
-        }
-      else
-        render json: {
-          template_id:   template.id,
-          template_name: template.name,
-          fields_count:  parsed_data[:fields].size,
-          submitters:    parsed_data[:submitters].map { |s| s[:name] }
-        }
+        render json: build_create_json(submissions), status: :created
       end
 
     rescue PdfFieldParser::ParseError => e
       Rollbar.warning(e) if defined?(Rollbar)
-      Rails.logger.error("PDF Parser Error: #{e.message}\n#{e.backtrace.first(10).join("\n")}")
-      temp_file&.close
-      temp_file&.unlink
+      Rails.logger.error("PDF Parser Error: #{e.message}")
       render json: { error: e.message }, status: :unprocessable_entity
-
+    rescue Submitters::NormalizeValues::BaseError, Submissions::CreateFromSubmitters::BaseError,
+           DownloadUtils::UnableToDownload => e
+      Rollbar.warning(e) if defined?(Rollbar)
+      render json: { error: e.message }, status: :unprocessable_entity
+    rescue ActiveRecord::RecordInvalid => e
+      Rails.logger.error("Validation Error: #{e.message}")
+      render json: { error: "Validation failed: #{e.record.errors.full_messages.join(', ')}" },
+             status: :unprocessable_entity
     rescue StandardError => e
       Rollbar.error(e) if defined?(Rollbar)
       Rails.logger.error("PDF Processing Error: #{e.class} - #{e.message}\n#{e.backtrace.first(10).join("\n")}")
-      temp_file&.close
-      temp_file&.unlink
       render json: { error: "Failed to process PDF: #{e.message}" }, status: :internal_server_error
     end
 

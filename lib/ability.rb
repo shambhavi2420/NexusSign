@@ -37,7 +37,6 @@ class Ability
     can :manage, EncryptedUserConfig, user_id: user.id
     can :manage, UserConfig, user_id: user.id
     can :manage, AccessToken, user_id: user.id
-    can :read, WebhookUrl, account_id: user.account_id
     can :manage, User, id: user.id
 
     # Account access (read/update) is a grantable section, not a baseline
@@ -62,7 +61,7 @@ class Ability
     can :manage, EncryptedUserConfig, user_id: user.id
     can :manage, UserConfig, user_id: user.id
     can :manage, AccessToken, user_id: user.id
-    can :read, WebhookUrl, account_id: user.account_id
+    can :manage, User, id: user.id
   end
 
   def viewer_abilities(user)
@@ -73,7 +72,7 @@ class Ability
     can :manage, EncryptedUserConfig, user_id: user.id
     can :manage, UserConfig, user_id: user.id
     can :manage, AccessToken, user_id: user.id
-    can :read, WebhookUrl, account_id: user.account_id
+    can :manage, User, id: user.id
   end
 
   def apply_settings_sections(user)

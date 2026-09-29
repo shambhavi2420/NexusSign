@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class RevealAccessTokenController < ApplicationController
+  before_action :authorize_api_section
+
   def show
     authorize!(:manage, current_user.access_token)
   end
@@ -17,5 +19,17 @@ class RevealAccessTokenController < ApplicationController
                                                         locals: { error_message: I18n.t('wrong_password') }),
              status: :unprocessable_content
     end
+  end
+
+  private
+
+  # Revealing the API token is part of the API settings screen, so gate it on
+  # the granted 'api' section. Super admins are unrestricted; editors and
+  # ungranted admins are blocked even though they can manage their own token.
+  def authorize_api_section
+    return if current_user.super_admin?
+    return if current_user.can_access_setting?('api')
+
+    raise CanCan::AccessDenied
   end
 end
