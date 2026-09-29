@@ -108,7 +108,9 @@ class PdfFieldParser
     'candidatestate'             => { type: 'candidatepermanentstate',    name: 'Candidate Permanent State' },
     'candidatepermanentzip'      => { type: 'candidatepermanentzip',      name: 'Candidate Permanent Zip' },
     'candidatezip'               => { type: 'candidatepermanentzip',      name: 'Candidate Permanent Zip' },
-    'candidatessn'               => { type: 'candidatessn',               name: 'Candidate SSN', preferences: { 'mask' => true } },
+    # SSN is unmasked by default; use ${CandidateSSN;mask=full} or
+    # ${CandidateSSN;mask=last4} to mask it.
+    'candidatessn'               => { type: 'candidatessn',               name: 'Candidate SSN' },
     'candidateprimaryprofession' => { type: 'candidateprimaryprofession', name: 'Candidate Primary Profession' },
     'candidateprofession'        => { type: 'candidateprimaryprofession', name: 'Candidate Primary Profession' },
     'candidateprimaryspecialty'  => { type: 'candidateprimaryspecialty',  name: 'Candidate Primary Specialty' },
@@ -534,7 +536,42 @@ class PdfFieldParser
     field[:preferences] = mapping[:preferences].dup if mapping && mapping[:preferences].present?
     field[:role] = options['role'] if options['role'].present?
 
+    # Optional ";mask=..." overrides the mapped default (e.g. for ${CandidateSSN}).
+    # Accepts: none/false (no mask), full/whole/true (mask whole),
+    #          last4/except_last_4 (mask all but last 4). Unknown values ignored.
+    if options.key?('mask')
+      mask_value, recognized = normalize_mask_option(options['mask'])
+
+      if recognized
+        field[:preferences] ||= {}
+
+        if mask_value.nil?
+          field[:preferences].delete('mask')
+        else
+          field[:preferences]['mask'] = mask_value
+        end
+
+        field.delete(:preferences) if field[:preferences].empty?
+      end
+    end
+
     field
+  end
+
+  # Translates a ${...} ";mask=" option into the stored preference encoding used
+  # across the app (see TextUtils.mask_value and the SSN dropdown). Returns
+  # [value, recognized?] so unknown values leave the mapped default untouched:
+  #   none / false            -> [nil, true]   (no masking; caller removes key)
+  #   full / whole / true     -> [true, true]  (mask the whole value)
+  #   last4 / except_last_4   -> [-4, true]    (mask all but the last 4)
+  #   anything else           -> [nil, false]  (unrecognized; leave default)
+  def normalize_mask_option(raw)
+    case raw.to_s.downcase.gsub(/[^a-z0-9]/, '')
+    when 'none', 'false', 'no', 'off', '0' then [nil, true]
+    when 'full', 'whole', 'true', 'all', 'yes', 'on' then [true, true]
+    when 'last4', 'exceptlast4', 'lastfour', 'last4digits' then [-4, true]
+    else [nil, false]
+    end
   end
 
   # Normalizes a ${...} tag name for mapping lookup: lowercases and strips every
