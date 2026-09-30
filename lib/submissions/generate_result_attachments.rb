@@ -331,8 +331,17 @@ module Submissions
             with_signature_id = field['preferences']['with_signature_id']
           end
 
+          # Every signature carries the identity stamp (name / timestamp / IP /
+          # Document ID) by default, so the audit info always appears on the
+          # signed PDF — even when the account-level Signature ID setting is off.
+          # A field may still explicitly opt out with preferences.with_signature_id: false.
+          signature_stamp = field.dig('preferences', 'with_signature_id') != false
+
           case field_type
-          when ->(type) { type == 'signature' && (with_signature_id || field.dig('preferences', 'reason_field_uuid')) }
+          when ->(type) {
+            type == 'signature' &&
+              (signature_stamp || with_signature_id || field.dig('preferences', 'reason_field_uuid'))
+          }
             attachment = submitter.attachments.find { |a| a.uuid == value }
 
             image =
