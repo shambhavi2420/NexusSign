@@ -109,6 +109,42 @@ RSpec.describe PdfFieldParser do
       expect(field[:role]).to eq('Signer 2')
     end
 
+    describe 'co-signer tags (implicit Signer 2)' do
+      it 'maps ${CoSignerSignature} to a signature field for Signer 2' do
+        field = described_class.parse_dollar_tag('CoSignerSignature')
+
+        expect(field[:type]).to eq('signature')
+        expect(field[:name]).to eq('Co-Signer Signature')
+        expect(field[:role]).to eq('Signer 2')
+      end
+
+      it 'maps ${CoSignerSignatureDate} to a date field for Signer 2' do
+        field = described_class.parse_dollar_tag('CoSignerSignatureDate')
+
+        expect(field[:type]).to eq('date')
+        expect(field[:role]).to eq('Signer 2')
+      end
+
+      it 'maps ${CoSignerInitials} to an initials field for Signer 2' do
+        field = described_class.parse_dollar_tag('CoSignerInitials')
+
+        expect(field[:type]).to eq('initials')
+        expect(field[:role]).to eq('Signer 2')
+      end
+
+      it 'lets an explicit ;role= override the implicit co-signer role' do
+        field = described_class.parse_dollar_tag('CoSignerSignature;role=Signer 3')
+
+        expect(field[:role]).to eq('Signer 3')
+      end
+
+      it 'is separator- and case-insensitive' do
+        %w[cosignersignature CoSigner_Signature co-signer-signature].each do |variant|
+          expect(described_class.parse_dollar_tag(variant)[:role]).to eq('Signer 2')
+        end
+      end
+    end
+
     it 'produces a field with a normalized area within 0..1' do
       field = described_class.parse_dollar_tag('CandidateFullName')
       area  = field[:areas].first
