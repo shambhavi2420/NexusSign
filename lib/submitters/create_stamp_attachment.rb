@@ -66,9 +66,30 @@ module Submitters
       name = ERB::Util.html_escape(name)
       role = ERB::Util.html_escape(role)
 
-      text = %(<span size="90">#{digitally_signed_by}:\n<b>#{name}</b>\n#{role}#{time} #{timezone}</span>)
+      # Signer IP (from the signing request) and the stable Document ID
+      # (MD5 of the submission slug, same value shown on the page footer and
+      # audit log) rendered on the stamp for audit traceability.
+      ip_line = build_ip_line(submitter)
+      document_id_line = build_document_id_line(submitter)
+
+      text = %(<span size="90">#{digitally_signed_by}:\n<b>#{name}</b>\n) +
+             %(#{role}#{time} #{timezone}#{ip_line}#{document_id_line}</span>)
 
       Vips::Image.text(text, width: WIDTH, height: HEIGHT, wrap: :'word-char')
+    end
+
+    def build_ip_line(submitter)
+      ip = submitter.ip.presence
+      return '' if ip.blank?
+
+      "\nIP: #{ERB::Util.html_escape(ip)}"
+    end
+
+    def build_document_id_line(submitter)
+      document_id = Digest::MD5.hexdigest(submitter.submission.slug).upcase
+      label = I18n.t(:document_id, locale: submitter.submission.account.locale)
+
+      "\n#{ERB::Util.html_escape(label)}: #{document_id}"
     end
 
     def build_name(submitter)

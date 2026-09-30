@@ -200,46 +200,6 @@ module Submissions
                                                                       with_signature_id_reason:)
     end
 
-    # Builds the multi-line text drawn next to a signature on the completed PDF.
-    #
-    # Lines:
-    #   1. "<reason or 'Digitally signed by'> <name> <email>"  (only when
-    #      with_signature_id_reason)
-    #   2. "<timestamp> <tz abbr>"
-    #   3. "IP: <signer ip>"                (omitted if no IP was captured)
-    #   4. "<Document ID label>: <document id>"
-    #
-    # IP comes from submitter.ip (the signing request), Document ID is the stable
-    # MD5-of-slug value also shown on the page footer and audit log.
-    def build_signature_stamp_text(submitter, attachment, reason_value, locale,
-                                   with_signature_id_reason:, with_submitter_timezone:)
-      signer_ip = submitter.ip.presence
-      document_id = Digest::MD5.hexdigest(submitter.submission.slug).upcase
-
-      I18n.with_locale(locale) do
-        timezone = submitter.account.timezone
-        timezone = submitter.timezone || submitter.account.timezone if with_submitter_timezone
-
-        timestamp_line =
-          "#{I18n.l(attachment.created_at.in_time_zone(timezone), format: :long)} " \
-          "#{TimeUtils.timezone_abbr(timezone, attachment.created_at)}"
-
-        lines = []
-
-        if with_signature_id_reason
-          lines << "#{"#{I18n.t('reason')}: " if reason_value}" \
-                   "#{reason_value || I18n.t('digitally_signed_by')} " \
-                   "#{submitter.name}#{" <#{submitter.email}>" if submitter.email.present?}"
-        end
-
-        lines << timestamp_line
-        lines << "IP: #{signer_ip}" if signer_ip
-        lines << "#{I18n.t('document_id')}: #{document_id}"
-
-        lines.join("\n")
-      end
-    end
-
     def fill_submitter_fields(submitter, account, pdfs_index, with_signature_id:, is_flatten:, with_headings: nil,
                               with_submitter_timezone: false, with_signature_id_reason: true, with_file_links: nil)
       cell_layouter = HexaPDF::Layout::TextLayouter.new(text_valign: :center, text_align: :center)
@@ -331,17 +291,8 @@ module Submissions
             with_signature_id = field['preferences']['with_signature_id']
           end
 
-          # Every signature carries the identity stamp (name / timestamp / IP /
-          # Document ID) by default, so the audit info always appears on the
-          # signed PDF — even when the account-level Signature ID setting is off.
-          # A field may still explicitly opt out with preferences.with_signature_id: false.
-          signature_stamp = field.dig('preferences', 'with_signature_id') != false
-
           case field_type
-          when ->(type) {
-            type == 'signature' &&
-              (signature_stamp || with_signature_id || field.dig('preferences', 'reason_field_uuid'))
-          }
+          when ->(type) { type == 'signature' && (with_signature_id || field.dig('preferences', 'reason_field_uuid')) }
             attachment = submitter.attachments.find { |a| a.uuid == value }
 
             image =
@@ -356,10 +307,21 @@ module Submissions
 
             reason_value = submitter.values[field.dig('preferences', 'reason_field_uuid')].presence
 
-            reason_string = build_signature_stamp_text(
-              submitter, attachment, reason_value, locale,
-              with_signature_id_reason:, with_submitter_timezone:
-            )
+            reason_string =
+              I18n.with_locale(locale) do
+                timezone = submitter.account.timezone
+                timezone = submitter.timezone || submitter.account.timezone if with_submitter_timezone
+
+                if with_signature_id_reason
+                  "#{"#{I18n.t('reason')}: " if reason_value}#{reason_value || I18n.t('digitally_signed_by')} " \
+                    "#{submitter.name}#{" <#{submitter.email}>" if submitter.email.present?}\n" \
+                    "#{I18n.l(attachment.created_at.in_time_zone(timezone), format: :long)} " \
+                    "#{TimeUtils.timezone_abbr(timezone, attachment.created_at)}"
+                else
+                  "#{I18n.l(attachment.created_at.in_time_zone(timezone), format: :long)} " \
+                    "#{TimeUtils.timezone_abbr(timezone, attachment.created_at)}"
+                end
+              end
 
             reason_text = HexaPDF::Layout::TextFragment.create(reason_string,
                                                                font:,
