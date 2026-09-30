@@ -307,6 +307,13 @@ module Submissions
 
             reason_value = submitter.values[field.dig('preferences', 'reason_field_uuid')].presence
 
+            # Signer IP (from the signing request) and the stable per-submission
+            # Document ID (same value shown on the page footer and audit log), so
+            # the stamp carries the same identifying info we track in the audit
+            # log. Appended as extra lines below the timestamp.
+            signer_ip = submitter.ip.presence
+            document_id = Digest::MD5.hexdigest(submitter.submission.slug).upcase
+
             reason_string =
               I18n.with_locale(locale) do
                 timezone = submitter.account.timezone
@@ -316,10 +323,14 @@ module Submissions
                   "#{"#{I18n.t('reason')}: " if reason_value}#{reason_value || I18n.t('digitally_signed_by')} " \
                     "#{submitter.name}#{" <#{submitter.email}>" if submitter.email.present?}\n" \
                     "#{I18n.l(attachment.created_at.in_time_zone(timezone), format: :long)} " \
-                    "#{TimeUtils.timezone_abbr(timezone, attachment.created_at)}"
+                    "#{TimeUtils.timezone_abbr(timezone, attachment.created_at)}" \
+                    "#{"\nIP: #{signer_ip}" if signer_ip}" \
+                    "\n#{I18n.t('document_id')}: #{document_id}"
                 else
                   "#{I18n.l(attachment.created_at.in_time_zone(timezone), format: :long)} " \
-                    "#{TimeUtils.timezone_abbr(timezone, attachment.created_at)}"
+                    "#{TimeUtils.timezone_abbr(timezone, attachment.created_at)}" \
+                    "#{"\nIP: #{signer_ip}" if signer_ip}" \
+                    "\n#{I18n.t('document_id')}: #{document_id}"
                 end
               end
 
