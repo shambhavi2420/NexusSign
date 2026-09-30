@@ -510,23 +510,30 @@ class PdfFieldParser
     field_type = mapping ? mapping[:type] : 'text'
     field_name = mapping ? mapping[:name] : humanize_dollar_tag_name(raw_name)
 
-    # Size the field: signatures/initials get larger boxes, everything else a
-    # standard text-width box. Fall back to the measured tag width if bigger.
-    field_width = [tag_width.to_f, estimate_field_width(field_type, page_width)].max
-    field_width = DOLLAR_DEFAULT_WIDTH.to_f if field_width <= 0
-    field_height = estimate_field_height(field_type, page_height)
-    field_height = DOLLAR_DEFAULT_HEIGHT.to_f if field_height <= 0
+    # Explicit ;width= / ;height= (in PDF points) always win.
+    field_width, field_height =
+      dollar_field_dimensions(field_type, tag_width, tag_height, options)
 
-    # Convert to relative coordinates (0-1), PDF bottom-left -> top-left origin.
+    # Place the field EXACTLY at the tag: anchor its top-left to the tag's
+    # top-left and grow downward, so the box starts right where the tag text is
+    # regardless of how tall the field is.
+    #
+    # `x`/`y` come from tag_position_within_chars in PDF bottom-left space, where
+    # `y` is ~the tag's bottom (descender) and `tag_height` its measured height.
+    # The tag's TOP in PDF space is therefore `y + tag_height`.
+    tag_top_pdf = y + (tag_height.to_f.positive? ? tag_height.to_f : field_height)
+
+    # Convert to a top-left origin (0-1). rel_y is the box's top edge, placed at
+    # the tag's top; the box then extends downward by field_height.
     rel_x = x / page_width
-    rel_y = 1.0 - ((y + field_height) / page_height)
+    rel_y = 1.0 - (tag_top_pdf / page_height)
     rel_w = field_width / page_width
     rel_h = field_height / page_height
 
     # Clamp to valid ranges.
-    rel_x = [[rel_x, 0].max, 0.95].min
-    rel_y = [[rel_y, 0].max, 0.95].min
-    rel_w = [[rel_w, 0.02].max, 1 - rel_x].min
+    rel_x = [[rel_x, 0].max, 0.99].min
+    rel_y = [[rel_y, 0].max, 0.99].min
+    rel_w = [[rel_w, 0.01].max, 1 - rel_x].min
     rel_h = [[rel_h, 0.01].max, 1 - rel_y].min
 
     field = {
@@ -590,6 +597,50 @@ class PdfFieldParser
     when 'last4', 'exceptlast4', 'lastfour', 'last4digits' then [-4, true]
     else [nil, false]
     end
+  end
+
+  # Computes a compact box size for a ${...} field, sized to the actual tag text
+  # (i.e. the surrounding font) instead of large page-percentage boxes. This
+  # keeps inline placeholders at a normal font size.
+  #
+  #   * height defaults to the measured tag height (~font_size * 1.3); a small
+  #     floor keeps it usable if the measurement is tiny.
+  #   * width defaults to the measured tag width, with a modest per-type minimum
+  #     (signatures/initials get a little more room to sign).
+  #   * explicit ;width= / ;height= options (PDF points) always override.
+  def dollar_field_dimensions(field_type, tag_width, tag_height, options)
+    measured_h = tag_height.to_f
+    measured_w = tag_width.to_f
+
+    # A sensible line height when the tag couldn't be measured.
+    base_h = measured_h.positive? ? measured_h : DOLLAR_DEFAULT_HEIGHT.to_f
+
+    # Signatures/initials read better slightly taller than a text line.
+    height =
+      case field_type
+      when 'signature' then base_h * 1.6
+      when 'initials'  then base_h * 1.3
+      else base_h
+      end
+
+    # Minimum widths expressed as multiples of the line height, so they scale
+    # with font size rather than the page. Fall back to the measured width.
+    min_w =
+      case field_type
+      when 'signature'        then base_h * 8
+      when 'initials'         then base_h * 3
+      when 'date', 'datenow'  then base_h * 5
+      when 'checkbox'         then base_h
+      else base_h * 6
+      end
+
+    width = [measured_w, min_w].max
+    width = DOLLAR_DEFAULT_WIDTH.to_f if width <= 0
+
+    width  = options['width'].to_f  if options['width'].present? && options['width'].to_f.positive?
+    height = options['height'].to_f if options['height'].present? && options['height'].to_f.positive?
+
+    [width, height]
   end
 
   # Normalizes a ${...} tag name for mapping lookup: lowercases and strips every
