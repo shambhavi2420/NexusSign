@@ -263,22 +263,30 @@ module Api
       temp_file.unlink
 
       # ------------------------------------------------------------------
-      # 3. When tags exist and there are multiple submitters, every tag field
-      #    must carry a role so we know which signer it belongs to. Reject
-      #    ambiguous requests with a clear, actionable error.
+      # 3. Role assignment for tag fields:
+      #    - A tag with an explicit ;role= binds to that submitter.
+      #    - Co-Signer tags (${CoSignerSignature} etc.) carry an implicit
+      #      "Signer 2" role, so they bind to the second party automatically.
+      #    - Any remaining roleless tag binds to the FIRST submitter (first
+      #      party). This is deterministic, so it is never ambiguous.
+      #
+      #    The only genuinely ambiguous case we still reject: a roleless tag
+      #    implies a party (first or, for co-signer tags, second) that wasn't
+      #    provided in the submitters list — e.g. a ${CoSignerSignature} with
+      #    only one submitter, or roleless tags with zero submitters.
       # ------------------------------------------------------------------
       parsed_fields = parsed_data[:fields] || []
 
-      if parsed_fields.any? && submitters_array.size > 1
-        roleless = parsed_fields.reject { |f| f[:role].present? }
+      required_roles = parsed_fields.filter_map { |f| f[:role].presence }.uniq
+      provided_roles = submitters_array.map { |s| normalize_role_value(s[:role]) }
 
-        if roleless.any?
-          names = roleless.map { |f| f[:name] }.uniq.join(', ')
-          return render json: {
-            error: 'Tags without a role were found but multiple submitters were provided. ' \
-                   "Add ;role=<submitter role> to these tags: #{names}"
-          }, status: :unprocessable_entity
-        end
+      missing_roles = required_roles.reject { |r| provided_roles.include?(normalize_role_value(r)) }
+
+      if missing_roles.any?
+        return render json: {
+          error: 'The PDF references signer roles that were not provided. ' \
+                 "Add submitters with these roles (or remove the tags): #{missing_roles.join(', ')}"
+        }, status: :unprocessable_entity
       end
 
       template_name = params[:filename].presence || 'PDF Template'
@@ -379,6 +387,12 @@ module Api
     # -------------------------------------------------------------------------
     private
     # -------------------------------------------------------------------------
+
+    # Whitespace/case-insensitive role comparison, mirroring
+    # Template.normalize_role so "Signer 2" and a space-stripped "Signer2" match.
+    def normalize_role_value(role)
+      role.to_s.downcase.gsub(/\s+/, '')
+    end
 
     # Converts flat top-level submitter params into the standard nested
     # submitters array so all downstream logic works unchanged.

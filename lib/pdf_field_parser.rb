@@ -69,7 +69,7 @@ class PdfFieldParser
   # the tag (CamelCase / snake_case is humanized into "Candidate Full Name" etc.),
   # which covers arbitrary custom tags.
   DOLLAR_TAG_MAPPINGS = {
-    # Built-in action fields
+    # Built-in action fields (first party by default)
     'signature'      => { type: 'signature', name: 'Signature' },
     'esignature'     => { type: 'signature', name: 'Signature' },
     'sign'           => { type: 'signature', name: 'Signature' },
@@ -79,6 +79,17 @@ class PdfFieldParser
     'datesigned'     => { type: 'date',      name: 'Date Field 1' },
     'date'           => { type: 'date',      name: 'Date Field 1' },
     'checkbox'       => { type: 'checkbox',  name: 'Checkbox' },
+
+    # Co-signer action fields. These implicitly belong to the SECOND party
+    # ("Signer 2") via `default_role`, so no ;role= is needed on the tag and
+    # they don't trip the roleless-multi-submitter guard.
+    'cosignersignature'     => { type: 'signature', name: 'Co-Signer Signature',      default_role: 'Signer 2' },
+    'cosignersign'          => { type: 'signature', name: 'Co-Signer Signature',      default_role: 'Signer 2' },
+    'cosignersignaturedate' => { type: 'date',      name: 'Co-Signer Signature Date', default_role: 'Signer 2' },
+    'cosignerdatesigned'    => { type: 'date',      name: 'Co-Signer Signature Date', default_role: 'Signer 2' },
+    'cosignerdate'          => { type: 'date',      name: 'Co-Signer Signature Date', default_role: 'Signer 2' },
+    'cosignerinitials'      => { type: 'initials',  name: 'Co-Signer Initials',       default_role: 'Signer 2' },
+    'cosignerinitial'       => { type: 'initials',  name: 'Co-Signer Initials',       default_role: 'Signer 2' },
 
     # Signer identity fields (map to the "Signer" custom types)
     'signerfullname'      => { type: 'signerfullname',      name: 'Signer Full Name' },
@@ -534,7 +545,14 @@ class PdfFieldParser
     }
 
     field[:preferences] = mapping[:preferences].dup if mapping && mapping[:preferences].present?
-    field[:role] = options['role'] if options['role'].present?
+
+    # Role resolution: an explicit ;role= always wins; otherwise a mapping may
+    # carry an implicit default_role (e.g. Co-Signer tags -> "Signer 2").
+    if options['role'].present?
+      field[:role] = options['role']
+    elsif mapping && mapping[:default_role].present?
+      field[:role] = mapping[:default_role]
+    end
 
     # Optional ";mask=..." overrides the mapped default (e.g. for ${CandidateSSN}).
     # Accepts: none/false (no mask), full/whole/true (mask whole),

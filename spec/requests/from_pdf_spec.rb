@@ -111,8 +111,8 @@ describe 'From PDF API (POST /api/submissions/from_pdf)' do
     end
   end
 
-  describe 'tag-based PDF, multiple submitters but roleless tags' do
-    it 'returns 422 listing the tags that need a role' do
+  describe 'tag-based PDF, multiple submitters with roleless first-party tags' do
+    it 'binds roleless tags to the first submitter (no error)' do
       post_from_pdf(
         pdf_base64: pdf_base64(['${Signature}', '${CandidateFullName}']),
         submitters: [
@@ -121,9 +121,55 @@ describe 'From PDF API (POST /api/submissions/from_pdf)' do
         ]
       )
 
+      expect(response).to have_http_status(:created)
+
+      template = Template.last
+      signer1_uuid = template.submitters.find { |s| s['name'] == 'Signer 1' }['uuid']
+      expect(template.fields.map { |f| f['submitter_uuid'] }.uniq).to eq([signer1_uuid])
+    end
+  end
+
+  describe 'co-signer tags (implicit second party)' do
+    it 'routes plain tags to Signer 1 and ${CoSigner*} tags to Signer 2 with no roles on the tags' do
+      post_from_pdf(
+        pdf_base64: pdf_base64([
+                                 '${Signature}',
+                                 '${SignatureDate}',
+                                 '${CoSignerSignature}',
+                                 '${CoSignerSignatureDate}',
+                                 '${CoSignerInitials}'
+                               ]),
+        submitters: [
+          { email: 'primary@example.com',  role: 'Signer 1', name: 'Primary' },
+          { email: 'cosigner@example.com', role: 'Signer 2', name: 'Co Signer' }
+        ]
+      )
+
+      expect(response).to have_http_status(:created)
+      expect(response.parsed_body.size).to eq(2)
+
+      template = Template.last
+      by_role  = template.submitters.index_by { |s| s['name'] }
+      s1_uuid  = by_role['Signer 1']['uuid']
+      s2_uuid  = by_role['Signer 2']['uuid']
+
+      s1_fields = template.fields.select { |f| f['submitter_uuid'] == s1_uuid }
+      s2_fields = template.fields.select { |f| f['submitter_uuid'] == s2_uuid }
+
+      # Signer 1: plain signature + date
+      expect(s1_fields.map { |f| f['type'] }).to contain_exactly('signature', 'date')
+      # Signer 2: co-signer signature + date + initials
+      expect(s2_fields.map { |f| f['type'] }).to contain_exactly('signature', 'date', 'initials')
+    end
+
+    it 'rejects a co-signer tag when no Signer 2 submitter is provided' do
+      post_from_pdf(
+        pdf_base64: pdf_base64(['${Signature}', '${CoSignerSignature}']),
+        submitters: [{ email: 'only@example.com', role: 'Signer 1' }]
+      )
+
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body['error']).to match(/without a role/)
-      expect(response.parsed_body['error']).to match(/Signature/)
+      expect(response.parsed_body['error']).to match(/Signer 2/)
     end
   end
 
