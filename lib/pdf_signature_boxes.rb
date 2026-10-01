@@ -146,12 +146,13 @@ module PdfSignatureBoxes
     end
   end
 
-  # Renders a single box with background, border, and (optionally) identity text.
+  # Renders a single box with background, border, and (optionally) a role label.
   #
-  # with_identity_text: defaults to true, so the role label and "Digitally signed
-  # by {email}" line are drawn — this keeps the signing-time placeholder box
-  # informative instead of empty. Pass false to suppress them.
-  def draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label, with_identity_text: true)
+  # with_identity_text: defaults to true, so the role label is drawn — this keeps
+  # the signing-time placeholder box informative instead of empty. Pass false to
+  # suppress it. (_email is retained for call-site arity but no longer rendered;
+  # see the note in the body.)
+  def draw_single_box(canvas, box_x, box_y, box_w, box_h, _email, role_label, with_identity_text: true)
     padding = 6
 
     canvas.save_graphics_state
@@ -167,14 +168,13 @@ module PdfSignatureBoxes
 
     return unless with_identity_text
 
-    # Role label (top)
+    # Role label (top) — a light signing-time hint. The "Digitally signed by
+    # {email}" line is intentionally NOT drawn: it is baked into the page
+    # background, so it would show through the final navy stamp (which already
+    # renders the email) and could not be hidden in the completed portal view.
     canvas.fill_color(0.35, 0.35, 0.35)
     canvas.font('Helvetica', size: 7)
     canvas.text(role_label, at: [box_x + padding, box_y + box_h - padding - 2])
-
-    # "Digitally signed by" line (bottom)
-    canvas.font('Helvetica', size: 6)
-    canvas.text("Digitally signed by #{email}", at: [box_x + padding, box_y + padding + 1])
   end
 
   # Builds the signature + date field hashes for each drawn box, index-aligned
@@ -223,6 +223,10 @@ module PdfSignatureBoxes
           'required'       => false,
           'readonly'       => true,
           'default_value'  => '{{date}}',
+          # Shown during signing, but hidden in the completed portal view: it sits
+          # over the signature box, and the final navy stamp already renders the
+          # E-Signed date, so leaving it visible would overlap the stamp.
+          'preferences'    => { 'hide_when_completed' => true },
           'areas'          => [{
             'x'               => box[:x] + (box[:w] * 0.05),
             'y'               => date_y,

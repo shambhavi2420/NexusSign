@@ -113,6 +113,10 @@
                   <% value ||= field['default_value'] if field['type'] == 'heading' %>
                   <% next if value.blank? %>
                   <% submitter = submitters_index[field['submitter_uuid']] %>
+                  <%# Hide fields flagged hide_when_completed (e.g. the signed_date that sits over
+                      the signature box) once the submitter has completed — the navy stamp overlay
+                      already renders the E-Signed date, so showing it would overlap the stamp. %>
+                  <% next if field.dig('preferences', 'hide_when_completed') && submitter&.completed_at? %>
                   <% if (mask = field.dig('preferences', 'mask').presence) && signed_in? && can?(:read, @submission) %>
                     <span class="group">
                       <span class="hidden group-hover:inline">
