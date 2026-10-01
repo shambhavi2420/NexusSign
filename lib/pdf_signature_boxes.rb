@@ -20,6 +20,16 @@ require 'hexapdf'
 #   box_layout: Array of { x:, y:, w:, h:, page: } in DocuSeal normalised coords,
 #               index-aligned with submitters_array.
 module PdfSignatureBoxes
+  # Shared visual identity for the electronic signature box, referenced both here
+  # (creation-time placeholder) and from Submissions::GenerateResultAttachments
+  # (final signed appearance) so the border/banner colour and label live in one
+  # place.
+  #
+  # NAVY_COLOR is #00205B = RGB (0, 32, 91), expressed as HexaPDF-normalised
+  # fill/stroke components (component / 255.0).
+  NAVY_COLOR = [0.0, 0.1255, 0.3569].freeze
+  ELECTRONIC_SIGNATURE_LABEL = 'NexusSIGN Electronic Signature'
+
   module_function
 
   # Accepts either a base64 string or raw PDF binary and returns
@@ -135,8 +145,8 @@ module PdfSignatureBoxes
     canvas.restore_graphics_state
 
     canvas.save_graphics_state
-    canvas.stroke_color(0.4, 0.5, 0.6)
-    canvas.line_width(0.6)
+    canvas.stroke_color(*NAVY_COLOR)
+    canvas.line_width(0.8)
     canvas.rectangle(box_x, box_y, box_w, box_h).stroke
     canvas.restore_graphics_state
 
