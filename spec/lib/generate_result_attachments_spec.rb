@@ -91,4 +91,16 @@ RSpec.describe Submissions::GenerateResultAttachments do
     expect(text).to include('Jane Q Signer')
     expect(text).not_to include('IP:')
   end
+
+  context 'without the signature-id account config' do
+    before { AccountConfig.where(account:, key: AccountConfig::WITH_SIGNATURE_ID).delete_all }
+
+    it 'still renders the electronic signature box on a plain signature field' do
+      text = extract_text(generate_result_pdf(submitter))
+
+      expect(text).to include('Jane Q Signer')
+      expect(text).to include('E-Signed:')
+      expect(text).to include(PdfSignatureBoxes::ELECTRONIC_SIGNATURE_LABEL)
+    end
+  end
 end

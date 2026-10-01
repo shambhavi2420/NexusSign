@@ -287,12 +287,12 @@ module Submissions
           field_type = 'file' if field_type == 'image' &&
                                  !submitter.attachments.find { |a| a.uuid == value }.image?
 
-          if field_type == 'signature' && field.dig('preferences', 'with_signature_id').in?([true, false])
-            with_signature_id = field['preferences']['with_signature_id']
-          end
-
           case field_type
-          when ->(type) { type == 'signature' && (with_signature_id || field.dig('preferences', 'reason_field_uuid')) }
+          when 'signature'
+            # Every signature field renders the navy electronic signature box
+            # (name / E-Signed timestamp / email / IP / banner / DocID) around
+            # the signature image. The with_signature_id / reason preferences no
+            # longer gate the box; they only control the optional reason line.
             attachment = submitter.attachments.find { |a| a.uuid == value }
 
             image =
@@ -350,7 +350,7 @@ module Submissions
               name: submitter.name, email: submitter.email, ip: submitter.ip,
               timestamp: esigned_timestamp, doc_id:, reason: reason_value, font:, bold_font:
             )
-          when 'image', 'signature', 'initials', 'stamp'
+          when 'image', 'initials', 'stamp'
             attachment = submitter.attachments.find { |a| a.uuid == value }
 
             image =

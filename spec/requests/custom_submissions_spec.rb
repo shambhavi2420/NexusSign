@@ -29,7 +29,7 @@ describe 'Custom Submissions API (POST /api/submissions/custom_submissions)' do
     expect(response.parsed_body['error']).to match(/pdf_base64/)
   end
 
-  it 'draws one signature + date box per submitter and returns the submitter array' do
+  it 'draws one signature box per submitter (no separate date field) and returns the submitter array' do
     post_custom(
       pdf_base64: pdf_base64,
       filename: 'Doc.pdf',
@@ -47,6 +47,8 @@ describe 'Custom Submissions API (POST /api/submissions/custom_submissions)' do
 
     types = template.fields.map { |f| f['type'] }
     expect(types.count('signature')).to eq(2)
-    expect(types.count('date')).to eq(2)
+    # No date field on the custom submissions path: the final navy signature box
+    # renders the E-Signed date itself, so a separate date field would duplicate it.
+    expect(types.count('date')).to eq(0)
   end
 end
