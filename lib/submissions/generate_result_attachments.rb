@@ -318,37 +318,21 @@ module Submissions
             doc_id = pdf.trailer.info[:DocumentID].presence ||
                      Digest::MD5.hexdigest(submitter.submission.slug).upcase
 
-            bold_font = pdf.fonts.add(FONT_BOLD_NAME, custom_encoding: FONT_BOLD_NAME.in?(DEFAULT_FONTS))
-
             area_x = area['x'] * width
             area_y_top = height - (area['y'] * height)
             area_w = area['w'] * width
             area_h = area['h'] * height
             box_bottom = area_y_top - area_h
 
-            # Draw the signer's signature image into the top portion of the box so
-            # the box carries the signed appearance; the stacked identity lines and
-            # banner are drawn by draw_electronic_signature_box over the lower part.
-            sig_region_h = area_h * 0.32
-            scale = [area_w / image.width, sig_region_h / image.height].min
-            if scale.positive?
-              io = StringIO.new(image.resize([scale * 4, 1].select(&:positive?).min).write_to_buffer('.png'))
-
-              canvas.image(
-                io,
-                at: [
-                  area_x + (area_w / 2) - ((image.width * scale) / 2),
-                  area_y_top - (image.height * scale) - (area_h * 0.02)
-                ],
-                width: image.width * scale,
-                height: image.height * scale
-              )
-            end
-
+            # The signer's signature image gets its own dedicated band inside the
+            # box (drawn by draw_electronic_signature_box); the E-Signed line,
+            # email, IP, banner and DocID surround it with gaps so nothing
+            # overlaps the signature.
             draw_electronic_signature_box(
               canvas, area_x, box_bottom, area_w, area_h,
-              name: submitter.name, email: submitter.email, ip: submitter.ip,
-              timestamp: esigned_timestamp, doc_id:, reason: reason_value, font:, bold_font:
+              email: submitter.email, ip: submitter.ip,
+              timestamp: esigned_timestamp, doc_id:, reason: reason_value,
+              signature_image: image, font:
             )
           when 'image', 'initials', 'stamp'
             attachment = submitter.attachments.find { |a| a.uuid == value }
@@ -614,17 +598,24 @@ module Submissions
     end
 
     # Draws the final signed "electronic signature box" over the given field area:
-    # a navy (#00205B) bordered rectangle containing, top to bottom, an
-    # "E-Signed:  <timestamp>" line, the signer NAME as the large focal element
-    # (auto-fit to the box width), the email, and an "IP: <ip>" line (only when
-    # +ip+ is present). A filled navy banner with white
-    # PdfSignatureBoxes::ELECTRONIC_SIGNATURE_LABEL text sits in the bottom-right
-    # corner, and a "DocID: <doc_id>" line is drawn just below the box.
+    # a navy (#00205B) bordered rectangle laid out, top to bottom, as:
+    #   - an "E-Signed:  <timestamp>" line
+    #   - a dedicated band holding the signer's drawn SIGNATURE image (its own
+    #     reserved space with gaps, so no text overlaps it)
+    #   - the email line and an "IP: <ip>" line (IP only when +ip+ present)
+    # A filled navy banner with white PdfSignatureBoxes::ELECTRONIC_SIGNATURE_LABEL
+    # text sits in the bottom-right corner, and a single-line "DocID: <doc_id>"
+    # line (font auto-shrunk to fit one line) is drawn just below the box.
+    #
+    # The signer NAME is intentionally never shown — the signature image is the
+    # focal element.
     #
     # box_x/box_y are PDF bottom-left coordinates of the box; box_w/box_h its size.
     # font/bold_font are HexaPDF fonts already added to the document.
+    # signature_image is a Vips image (the drawn/typed signature) or nil.
     def draw_electronic_signature_box(canvas, box_x, box_y, box_w, box_h,
-                                      name:, email:, ip:, timestamp:, doc_id:, font:, bold_font:, reason: nil)
+                                      email:, ip:, timestamp:, doc_id:, font:, bold_font: nil,
+                                      reason: nil, signature_image: nil)
       padding = [box_w, box_h].min * 0.06
       inner_w = box_w - (2 * padding)
       inner_x = box_x + padding
@@ -638,6 +629,7 @@ module Submissions
 
       banner_h = box_h * 0.18
       meta_size = [box_h * 0.1, 5].max
+      line_gap = meta_size * 0.4
       layouter = HexaPDF::Layout::TextLayouter.new(text_valign: :top, text_align: :left)
 
       cursor_y = box_y + box_h - padding
@@ -649,53 +641,69 @@ module Submissions
                                                        fill_color: PdfSignatureBoxes::NAVY_COLOR)
         res = layouter.fit([esigned], inner_w, box_h)
         res.draw(canvas, inner_x, cursor_y)
-        cursor_y -= res.lines.sum(&:height) + (meta_size * 0.4)
+        cursor_y -= res.lines.sum(&:height) + line_gap
       end
 
-      # Signer NAME: the dominant element. Start large and shrink to fit one line.
-      if name.present?
-        name_size = box_h * 0.3
-        name_fragment = nil
-        name_result = nil
+      # Reserve space for the lines that live BELOW the signature band
+      # (email, IP, reason) plus the banner, so the signature band fills only
+      # the gap between the E-Signed line and that lower content — never
+      # overlapping any of it.
+      below_lines = [email.present?, ip.present?, reason.present?].count(true)
+      below_h = (below_lines * (meta_size + (line_gap * 0.75)))
+      sig_bottom = box_y + banner_h + (padding * 0.5) + below_h
+      sig_top = cursor_y
+      sig_band_h = [sig_top - sig_bottom, 0].max
 
-        loop do
-          name_fragment = HexaPDF::Layout::TextFragment.create(name, font: bold_font, font_size: name_size,
-                                                                     fill_color: PdfSignatureBoxes::NAVY_COLOR)
-          name_result = layouter.fit([name_fragment], inner_w, box_h)
+      # Signature image centred in its dedicated band (never shared with text).
+      if signature_image && sig_band_h.positive?
+        sig_pad = padding * 0.5
+        avail_w = inner_w
+        avail_h = [sig_band_h - sig_pad, 0].max
+        scale = [avail_w / signature_image.width, avail_h / signature_image.height].min
 
-          break if name_result.status == :success && name_result.lines.size <= 1
-          break if name_size <= meta_size
+        if scale.positive?
+          io = StringIO.new(
+            signature_image.resize([scale * 4, 1].select(&:positive?).min).write_to_buffer('.png')
+          )
+          img_w = signature_image.width * scale
+          img_h = signature_image.height * scale
 
-          name_size -= 1
+          canvas.image(
+            io,
+            at: [
+              inner_x + ((avail_w - img_w) / 2),
+              sig_bottom + ((sig_band_h - img_h) / 2)
+            ],
+            width: img_w,
+            height: img_h
+          )
         end
-
-        name_result.draw(canvas, inner_x, cursor_y)
-        cursor_y -= name_result.lines.sum(&:height) + (meta_size * 0.4)
       end
 
-      # Email line.
+      # Lines below the signature band: email, IP, reason — stacked up from just
+      # above the banner so they always sit under the signature.
+      lower_cursor_y = box_y + banner_h + (padding * 0.5) + below_h
+
       if email.present?
         email_frag = HexaPDF::Layout::TextFragment.create(email, font:, font_size: meta_size,
                                                                  fill_color: PdfSignatureBoxes::NAVY_COLOR)
         res = layouter.fit([email_frag], inner_w, box_h)
-        res.draw(canvas, inner_x, cursor_y)
-        cursor_y -= res.lines.sum(&:height) + (meta_size * 0.3)
+        res.draw(canvas, inner_x, lower_cursor_y)
+        lower_cursor_y -= res.lines.sum(&:height) + (line_gap * 0.75)
       end
 
-      # IP line (only when captured).
       if ip.present?
         ip_frag = HexaPDF::Layout::TextFragment.create("IP: #{ip}", font:, font_size: meta_size,
                                                                     fill_color: PdfSignatureBoxes::NAVY_COLOR)
         res = layouter.fit([ip_frag], inner_w, box_h)
-        res.draw(canvas, inner_x, cursor_y)
-        cursor_y -= res.lines.sum(&:height) + (meta_size * 0.3)
+        res.draw(canvas, inner_x, lower_cursor_y)
+        lower_cursor_y -= res.lines.sum(&:height) + (line_gap * 0.75)
       end
 
-      # Optional custom reason line (honours with_signature_id_reason).
       if reason.present?
         reason_frag = HexaPDF::Layout::TextFragment.create(reason, font:, font_size: meta_size,
                                                                    fill_color: PdfSignatureBoxes::NAVY_COLOR)
-        layouter.fit([reason_frag], inner_w, box_h).draw(canvas, inner_x, cursor_y)
+        layouter.fit([reason_frag], inner_w, box_h).draw(canvas, inner_x, lower_cursor_y)
       end
 
       # Bottom-right navy banner with white label text, sized to fit.
@@ -703,7 +711,6 @@ module Submissions
       banner_x = box_x + box_w - banner_w
       banner_y = box_y
       label_size = banner_h * 0.55
-      label_frag = nil
       label_result = nil
 
       loop do
@@ -725,14 +732,27 @@ module Submissions
 
       label_result.draw(canvas, banner_x + 2, banner_y + banner_h)
 
-      # DocID line just below the box border.
+      # DocID line just below the box border — ALWAYS a single line: shrink the
+      # font until "DocID: <doc_id>" fits the full box width on one line.
       return if doc_id.blank?
 
-      docid_frag = HexaPDF::Layout::TextFragment.create("DocID: #{doc_id}", font:, font_size: meta_size,
-                                                                            fill_color: PdfSignatureBoxes::NAVY_COLOR)
-      HexaPDF::Layout::TextLayouter.new(text_valign: :top, text_align: :left)
-                                   .fit([docid_frag], box_w, box_h)
-                                   .draw(canvas, box_x, box_y - 2)
+      docid_text = "DocID: #{doc_id}"
+      docid_size = meta_size
+      docid_result = nil
+
+      loop do
+        docid_frag = HexaPDF::Layout::TextFragment.create(docid_text, font:, font_size: docid_size,
+                                                                      fill_color: PdfSignatureBoxes::NAVY_COLOR)
+        docid_result = HexaPDF::Layout::TextLayouter.new(text_valign: :top, text_align: :left)
+                                                    .fit([docid_frag], box_w, box_h)
+
+        break if docid_result.status == :success && docid_result.lines.size <= 1
+        break if docid_size <= 3
+
+        docid_size -= 0.5
+      end
+
+      docid_result.draw(canvas, box_x, box_y - 2)
     end
 
     def build_pdf_attachment(pdf:, submitter:, pkcs:, tsa_url:, uuid:, name:)

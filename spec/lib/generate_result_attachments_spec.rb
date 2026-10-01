@@ -72,10 +72,13 @@ RSpec.describe Submissions::GenerateResultAttachments do
     attach_signature!
   end
 
-  it 'renders the signer name, DocID and IP in the electronic signature box' do
+  it 'renders the email, DocID and IP in the electronic signature box' do
     text = extract_text(generate_result_pdf(submitter))
 
-    expect(text).to include('Jane Q Signer')
+    # The signer name is intentionally NOT shown — the signature image is the
+    # focal element.
+    expect(text).not_to include('Jane Q Signer')
+    expect(text).to include('jane@example.com')
     expect(text).to include('DocID:')
     expect(text).to include(Digest::MD5.hexdigest(submission.slug).upcase)
     expect(text).to include('IP: 203.0.113.42')
@@ -88,7 +91,7 @@ RSpec.describe Submissions::GenerateResultAttachments do
 
     text = extract_text(generate_result_pdf(submitter))
 
-    expect(text).to include('Jane Q Signer')
+    expect(text).to include('jane@example.com')
     expect(text).not_to include('IP:')
   end
 
@@ -98,7 +101,7 @@ RSpec.describe Submissions::GenerateResultAttachments do
     it 'still renders the electronic signature box on a plain signature field' do
       text = extract_text(generate_result_pdf(submitter))
 
-      expect(text).to include('Jane Q Signer')
+      expect(text).to include('jane@example.com')
       expect(text).to include('E-Signed:')
       expect(text).to include(PdfSignatureBoxes::ELECTRONIC_SIGNATURE_LABEL)
     end
