@@ -6,34 +6,61 @@
 <% font_size_px = (field.dig('preferences', 'font_size').presence || Submissions::GenerateResultAttachments::FONT_SIZE).to_i * local_assigns.fetch(:font_scale) { 1000.0 / PdfUtils::US_LETTER_W } %>
 <field-value dir="auto" class="flex absolute <%= 'font-courier' if font == 'Courier' %> <%= 'font-times' if font == 'Times' %> <%= 'font-bold' if font_type == 'bold' || font_type == 'bold_italic' %> <%= 'italic' if font_type == 'italic' || font_type == 'bold_italic' %> <%= align == 'right' ? 'text-right' : (align == 'center' ? 'text-center' : '') %>" style="<%= "color: #{color}; " if color.present? %>width: <%= area['w'] * 100 %>%; height: <%= area['h'] * 100 %>%; left: <%= area['x'] * 100 %>%; top: <%= area['y'] * 100 %>%; font-size: <%= fs = "clamp(1pt, #{font_size_px / 10}vw, #{font_size_px}px)" %>; line-height: calc(<%= fs %> * 1.3); font-size: <%= fs = "#{font_size_px / 10}cqmin" %>; line-height: calc(<%= fs %> * 1.3)">
   <% if field['type'] == 'signature' %>
-    <% is_narrow = area['h']&.positive? && (area['w'].to_f / area['h']) > 6 %>
-    <div class="flex justify-between w-full h-full gap-1 <%= is_narrow && (local_assigns[:with_signature_id] || field.dig('preferences', 'reason_field_uuid').present?) ? 'flex-row' : 'flex-col' %>">
-      <div class="flex overflow-hidden <%= is_narrow && (local_assigns[:with_signature_id] || field.dig('preferences', 'reason_field_uuid').present?) ? 'w-1/2' : 'flex-grow' %>" style="min-height: 50%">
-        <% if attachments_index[value] %>
-          <img class="object-contain mx-auto" src="<%= attachments_index[value].url %>">
+    <% signature_attachment = attachments_index[value] %>
+    <% if submitter&.completed_at? && signature_attachment %>
+      <%
+        # Completed submission: render the same navy electronic signature box that
+        # GenerateResultAttachments bakes into the downloaded PDF, so the portal
+        # view matches the download. Email only (never the signer name). The box
+        # only appears once the submitter has completed; the signing-time view is
+        # unaffected (submitter not yet completed).
+        navy = PdfSignatureBoxes::NAVY_COLOR_HEX
+        sig_timezone = local_assigns[:with_submitter_timezone] ? (submitter.timezone || local_assigns[:timezone]) : local_assigns[:timezone]
+        esigned_at = "#{l(signature_attachment.created_at.in_time_zone(sig_timezone), format: :short, locale: local_assigns[:locale])} #{TimeUtils.timezone_abbr(sig_timezone, signature_attachment.created_at)}"
+        doc_id = submitter.submission.slug.then { |s| Digest::MD5.hexdigest(s).upcase }
+      %>
+      <div class="w-full h-full flex flex-col" style="border: 1px solid <%= navy %>; color: <%= navy %>; box-sizing: border-box; padding: 2%; container-type: size; overflow: hidden">
+        <div class="shrink-0 truncate" style="font-size: 11cqh">E-Signed:&nbsp;&nbsp;<%= esigned_at %></div>
+        <div class="flex-grow flex items-center justify-center overflow-hidden" style="min-height: 0">
+          <img class="object-contain max-w-full max-h-full" src="<%= signature_attachment.url %>">
+        </div>
+        <div class="shrink-0 truncate" style="font-size: 11cqh"><%= submitter.email %></div>
+        <% if submitter.ip.present? %>
+          <div class="shrink-0 truncate" style="font-size: 11cqh">IP:&nbsp;<%= submitter.ip %></div>
+        <% end %>
+        <div class="shrink-0 self-end truncate" style="background: <%= navy %>; color: #fff; font-size: 10cqh; padding: 0.5cqh 2cqw; max-width: 65%"><%= PdfSignatureBoxes::ELECTRONIC_SIGNATURE_LABEL %></div>
+      </div>
+      <div class="absolute left-0 truncate" style="top: 100%; width: 100%; color: <%= navy %>; font-size: 9cqh; line-height: 1.1">DocID:&nbsp;<%= doc_id %></div>
+    <% else %>
+      <% is_narrow = area['h']&.positive? && (area['w'].to_f / area['h']) > 6 %>
+      <div class="flex justify-between w-full h-full gap-1 <%= is_narrow && (local_assigns[:with_signature_id] || field.dig('preferences', 'reason_field_uuid').present?) ? 'flex-row' : 'flex-col' %>">
+        <div class="flex overflow-hidden <%= is_narrow && (local_assigns[:with_signature_id] || field.dig('preferences', 'reason_field_uuid').present?) ? 'w-1/2' : 'flex-grow' %>" style="min-height: 50%">
+          <% if signature_attachment %>
+            <img class="object-contain mx-auto" src="<%= signature_attachment.url %>">
+          <% end %>
+        </div>
+        <% if (local_assigns[:with_signature_id] || field.dig('preferences', 'reason_field_uuid').present?) && attachment = signature_attachment %>
+          <div class="text-[1vw] lg:text-[0.55rem] lg:leading-[0.65rem] <%= is_narrow ? 'w-1/2' : 'w-full' %>">
+            <div class="truncate uppercase">
+              ID: <%= attachment.uuid %>
+            </div>
+            <% if local_assigns[:with_signature_id_reason] != false %>
+              <div>
+                <% reason_value = submitter.values[field.dig('preferences', 'reason_field_uuid')].presence %>
+                <% if reason_value %><%= t('reason') %>: <% end %><%= reason_value || t('digitally_signed_by') %> <%= submitter.name %>
+                <% if submitter.email %>
+                  &lt;<%= submitter.email %>&gt;
+                <% end %>
+              </div>
+            <% end %>
+            <div>
+              <% timezone = local_assigns[:with_submitter_timezone] ? (submitter.timezone || local_assigns[:timezone]) : local_assigns[:timezone] %>
+              <%= l(attachment.created_at.in_time_zone(timezone), format: :long, locale: local_assigns[:locale]) %> <%= TimeUtils.timezone_abbr(timezone, attachment.created_at) %>
+            </div>
+          </div>
         <% end %>
       </div>
-      <% if (local_assigns[:with_signature_id] || field.dig('preferences', 'reason_field_uuid').present?) && attachment = attachments_index[value] %>
-        <div class="text-[1vw] lg:text-[0.55rem] lg:leading-[0.65rem] <%= is_narrow ? 'w-1/2' : 'w-full' %>">
-          <div class="truncate uppercase">
-            ID: <%= attachment.uuid %>
-          </div>
-          <% if local_assigns[:with_signature_id_reason] != false %>
-            <div>
-              <% reason_value = submitter.values[field.dig('preferences', 'reason_field_uuid')].presence %>
-              <% if reason_value %><%= t('reason') %>: <% end %><%= reason_value || t('digitally_signed_by') %> <%= submitter.name %>
-              <% if submitter.email %>
-                &lt;<%= submitter.email %>&gt;
-              <% end %>
-            </div>
-          <% end %>
-          <div>
-            <% timezone = local_assigns[:with_submitter_timezone] ? (submitter.timezone || local_assigns[:timezone]) : local_assigns[:timezone] %>
-            <%= l(attachment.created_at.in_time_zone(timezone), format: :long, locale: local_assigns[:locale]) %> <%= TimeUtils.timezone_abbr(timezone, attachment.created_at) %>
-          </div>
-        </div>
-      <% end %>
-    </div>
+    <% end %>
   <% elsif field['type'].in?(['image', 'initials', 'stamp']) && attachments_index[value]&.image? %>
     <img class="object-contain mx-auto" src="<%= attachments_index[value].url %>" loading="lazy">
   <% elsif field['type'].in?(['file', 'payment', 'image']) %>
