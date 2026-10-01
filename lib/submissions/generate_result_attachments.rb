@@ -272,6 +272,12 @@ module Submissions
 
           next if Array.wrap(value).compact_blank.blank?
 
+          # Skip fields flagged hide_when_completed (e.g. the signed_date that sits
+          # over the signature box). The result PDF is generated after completion,
+          # and the navy signature box already renders the E-Signed date, so this
+          # field would just overlap the stamp.
+          next if field.dig('preferences', 'hide_when_completed')
+
           if is_flatten
             begin
               page.flatten_annotations
@@ -654,19 +660,21 @@ module Submissions
       sig_top = cursor_y
       sig_band_h = [sig_top - sig_bottom, 0].max
 
-      # Signature image centred in its dedicated band (never shared with text).
+      # Signature image centred in its dedicated band (never shared with text),
+      # darkened so a faint signature reads clearly on the page.
       if signature_image && sig_band_h.positive?
         sig_pad = padding * 0.5
         avail_w = inner_w
         avail_h = [sig_band_h - sig_pad, 0].max
-        scale = [avail_w / signature_image.width, avail_h / signature_image.height].min
+        darkened = darken_signature_image(signature_image)
+        scale = [avail_w / darkened.width, avail_h / darkened.height].min
 
         if scale.positive?
           io = StringIO.new(
-            signature_image.resize([scale * 4, 1].select(&:positive?).min).write_to_buffer('.png')
+            darkened.resize([scale * 4, 1].select(&:positive?).min).write_to_buffer('.png')
           )
-          img_w = signature_image.width * scale
-          img_h = signature_image.height * scale
+          img_w = darkened.width * scale
+          img_h = darkened.height * scale
 
           canvas.image(
             io,
@@ -753,6 +761,28 @@ module Submissions
       end
 
       docid_result.draw(canvas, box_x, box_y - 2)
+    end
+
+    # Darkens a signature image so faint strokes read clearly: boosts contrast
+    # around mid-grey and pushes the result darker, while preserving any alpha
+    # channel. Falls back to the original image on any Vips error.
+    def darken_signature_image(image)
+      has_alpha = image.has_alpha?
+      alpha = has_alpha ? image.extract_band(image.bands - 1) : nil
+      rgb = has_alpha ? image.extract_band(0, n: image.bands - 1) : image
+
+      # out = (in - 128) * contrast + 128 - shift, clamped to [0, 255].
+      contrast = 1.8
+      shift = 40
+      adjusted = (((rgb - 128) * contrast) + 128 - shift)
+      adjusted = (adjusted < 0).ifthenelse(0, adjusted)
+      adjusted = (adjusted > 255).ifthenelse(255, adjusted)
+
+      result = has_alpha ? adjusted.bandjoin(alpha) : adjusted
+      result.cast(:uchar)
+    rescue Vips::Error, StandardError => e
+      Rollbar.error(e) if defined?(Rollbar)
+      image
     end
 
     def build_pdf_attachment(pdf:, submitter:, pkcs:, tsa_url:, uuid:, name:)
