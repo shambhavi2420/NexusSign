@@ -63,7 +63,7 @@ module Api
       #    (normalised DocuSeal coords) used for field placement.
       # ------------------------------------------------------------------
       modified_pdf_binary, total_pages, box_layout =
-        PdfSignatureBoxes.call(params[:pdf_base64], submitters_array)
+        PdfSignatureBoxes.call(params[:pdf_base64], submitters_array, with_identity_text: false)
 
       ActiveRecord::Base.transaction do
         # ----------------------------------------------------------------
@@ -251,9 +251,12 @@ module Api
         "#{total_pages} pages, #{box_layout.size} field boxes"
       )
 
-      # Build one signature field + one date field per signer, each anchored
-      # to that signer's box in box_layout (shared with from_pdf's tag-less path).
-      fields = PdfSignatureBoxes.build_box_fields(box_layout, template_submitters, attachment_uuid)
+      # Build one signature field per signer, each anchored to that signer's box
+      # in box_layout. No separate date field: the final navy signature box
+      # renders the E-Signed date itself, so a date field would duplicate it.
+      # (from_pdf still gets the date field via build_box_fields defaults.)
+      fields = PdfSignatureBoxes.build_box_fields(box_layout, template_submitters, attachment_uuid,
+                                                  with_date_field: false)
 
       template.update!(schema: schema, fields: fields)
 

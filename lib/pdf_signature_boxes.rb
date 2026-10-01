@@ -34,7 +34,12 @@ module PdfSignatureBoxes
 
   # Accepts either a base64 string or raw PDF binary and returns
   # [modified_pdf_binary, total_pages, box_layout].
-  def call(pdf_input, submitters_array)
+  #
+  # with_identity_text: when true (default, used by from_pdf) the placeholder box
+  # prints the role label and a "Digitally signed by {email}" line. Custom
+  # submissions passes false because the final navy signature box already renders
+  # the email and signing date, so printing them here would duplicate them.
+  def call(pdf_input, submitters_array, with_identity_text: true)
     pdf_binary  = looks_like_base64?(pdf_input) ? Base64.decode64(pdf_input) : pdf_input
     n           = submitters_array.size
     result      = nil
@@ -57,7 +62,8 @@ module PdfSignatureBoxes
         # <= 3 signers: single row at the bottom of the last page.
         box_layout = draw_signature_row(
           doc, last_page, page_w, page_h, submitters_array,
-          row_index: 0, page_index: original_pages - 1, anchor: :bottom
+          row_index: 0, page_index: original_pages - 1, anchor: :bottom,
+          with_identity_text:
         )
         total_pages = original_pages
       else
@@ -71,7 +77,8 @@ module PdfSignatureBoxes
         submitters_array.each_slice(3).each_with_index do |row_signers, row_idx|
           row_layout = draw_signature_row(
             doc, new_page, page_w, page_h, row_signers,
-            row_index: row_idx, page_index: new_page_index, anchor: :top
+            row_index: row_idx, page_index: new_page_index, anchor: :top,
+            with_identity_text:
           )
           box_layout.concat(row_layout)
         end
@@ -97,7 +104,8 @@ module PdfSignatureBoxes
   #
   # anchor: :bottom -> boxes pinned to the page bottom (last-page case)
   #         :top    -> boxes stacked from the top, offset by row_index (appended page)
-  def draw_signature_row(doc, page, page_w, page_h, signers, row_index:, page_index:, anchor:)
+  def draw_signature_row(doc, page, page_w, page_h, signers, row_index:, page_index:, anchor:,
+                         with_identity_text: true)
     n        = signers.size
     margin_x = page_w * 0.03
     margin_y = page_h * 0.03
@@ -123,7 +131,7 @@ module PdfSignatureBoxes
       email      = signer[:email]
       role_label = signer[:role].to_s
 
-      draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label)
+      draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label, with_identity_text:)
 
       {
         x:    box_x / page_w,
@@ -135,8 +143,13 @@ module PdfSignatureBoxes
     end
   end
 
-  # Renders a single box with background, border, and two text lines.
-  def draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label)
+  # Renders a single box with background, border, and (optionally) identity text.
+  #
+  # with_identity_text: when false, the role label and "Digitally signed by
+  # {email}" line are skipped. Custom submissions sets this because the final
+  # navy signature box already shows the email and E-Signed date; drawing them
+  # here as well would duplicate them.
+  def draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label, with_identity_text: true)
     padding = 6
 
     canvas.save_graphics_state
@@ -149,6 +162,8 @@ module PdfSignatureBoxes
     canvas.line_width(0.8)
     canvas.rectangle(box_x, box_y, box_w, box_h).stroke
     canvas.restore_graphics_state
+
+    return unless with_identity_text
 
     # Role label (top)
     canvas.fill_color(0.35, 0.35, 0.35)
@@ -163,7 +178,12 @@ module PdfSignatureBoxes
   # Builds the signature + date field hashes for each drawn box, index-aligned
   # with template_submitters (an array of { 'uuid' => ..., 'name' => role }).
   # Mirrors the field geometry used by CustomSubmissionsController.
-  def build_box_fields(box_layout, template_submitters, attachment_uuid)
+  #
+  # with_date_field: when true (default, used by from_pdf) a readonly date field
+  # ("signed_date_N") is added below each signature. Custom submissions passes
+  # false because the final navy signature box already renders the E-Signed date,
+  # so a separate date field would duplicate it.
+  def build_box_fields(box_layout, template_submitters, attachment_uuid, with_date_field: true)
     template_submitters.each_with_index.flat_map do |submitter, i|
       box = box_layout[i]
       next [] unless box
@@ -175,7 +195,7 @@ module PdfSignatureBoxes
       date_h = box[:h] * 0.16
       date_y = box[:y] + (box[:h] * 0.60)
 
-      [
+      fields = [
         {
           'uuid'           => SecureRandom.uuid,
           'submitter_uuid' => submitter_uuid,
@@ -190,8 +210,11 @@ module PdfSignatureBoxes
             'page'            => box[:page],
             'attachment_uuid' => attachment_uuid
           }]
-        },
-        {
+        }
+      ]
+
+      if with_date_field
+        fields << {
           'uuid'           => SecureRandom.uuid,
           'submitter_uuid' => submitter_uuid,
           'name'           => "signed_date_#{i + 1}",
@@ -208,7 +231,9 @@ module PdfSignatureBoxes
             'attachment_uuid' => attachment_uuid
           }]
         }
-      ]
+      end
+
+      fields
     end.compact
   end
 
