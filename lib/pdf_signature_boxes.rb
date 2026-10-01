@@ -35,11 +35,11 @@ module PdfSignatureBoxes
   # Accepts either a base64 string or raw PDF binary and returns
   # [modified_pdf_binary, total_pages, box_layout].
   #
-  # with_identity_text: when true (default, used by from_pdf) the placeholder box
-  # prints the role label and a "Digitally signed by {email}" line. Custom
-  # submissions passes false because the final navy signature box already renders
-  # the email and signing date, so printing them here would duplicate them.
-  def call(pdf_input, submitters_array, with_identity_text: true)
+  # with_identity_text: defaults to false — the final navy signature box already
+  # renders the email and signing date for both custom submissions and from_pdf,
+  # so the placeholder role label / "Digitally signed by {email}" line would
+  # duplicate them. Pass true to restore the old informative placeholder.
+  def call(pdf_input, submitters_array, with_identity_text: false)
     pdf_binary  = looks_like_base64?(pdf_input) ? Base64.decode64(pdf_input) : pdf_input
     n           = submitters_array.size
     result      = nil
@@ -105,7 +105,7 @@ module PdfSignatureBoxes
   # anchor: :bottom -> boxes pinned to the page bottom (last-page case)
   #         :top    -> boxes stacked from the top, offset by row_index (appended page)
   def draw_signature_row(doc, page, page_w, page_h, signers, row_index:, page_index:, anchor:,
-                         with_identity_text: true)
+                         with_identity_text: false)
     n        = signers.size
     margin_x = page_w * 0.03
     margin_y = page_h * 0.03
@@ -145,11 +145,11 @@ module PdfSignatureBoxes
 
   # Renders a single box with background, border, and (optionally) identity text.
   #
-  # with_identity_text: when false, the role label and "Digitally signed by
-  # {email}" line are skipped. Custom submissions sets this because the final
-  # navy signature box already shows the email and E-Signed date; drawing them
-  # here as well would duplicate them.
-  def draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label, with_identity_text: true)
+  # with_identity_text: defaults to false, so the role label and "Digitally
+  # signed by {email}" line are skipped — the final navy signature box already
+  # shows the email and E-Signed date; drawing them here would duplicate them.
+  # Pass true to restore the informative placeholder.
+  def draw_single_box(canvas, box_x, box_y, box_w, box_h, email, role_label, with_identity_text: false)
     padding = 6
 
     canvas.save_graphics_state
@@ -179,11 +179,10 @@ module PdfSignatureBoxes
   # with template_submitters (an array of { 'uuid' => ..., 'name' => role }).
   # Mirrors the field geometry used by CustomSubmissionsController.
   #
-  # with_date_field: when true (default, used by from_pdf) a readonly date field
-  # ("signed_date_N") is added below each signature. Custom submissions passes
-  # false because the final navy signature box already renders the E-Signed date,
-  # so a separate date field would duplicate it.
-  def build_box_fields(box_layout, template_submitters, attachment_uuid, with_date_field: true)
+  # with_date_field: defaults to false — the final navy signature box renders the
+  # E-Signed date for both custom submissions and from_pdf, so a separate
+  # readonly "signed_date_N" field would duplicate it. Pass true to add it back.
+  def build_box_fields(box_layout, template_submitters, attachment_uuid, with_date_field: false)
     template_submitters.each_with_index.flat_map do |submitter, i|
       box = box_layout[i]
       next [] unless box
