@@ -19,24 +19,29 @@
         esigned_at = "#{l(signature_attachment.created_at.in_time_zone(sig_timezone), format: :short, locale: local_assigns[:locale])} #{TimeUtils.timezone_abbr(sig_timezone, signature_attachment.created_at)}"
         doc_id = submitter.submission.slug.then { |s| Digest::MD5.hexdigest(s).upcase }
       %>
-      <%# The box carries `container-type: size`, so cq* units inside it resolve
-          against the box. The DocID line sits BELOW the box but must size against
-          the box too, so it lives inside this same container (absolutely
-          positioned just under the border) rather than outside it — otherwise
-          cqh would resolve against the whole page and render huge. %>
+      <%# Completed-view navy stamp. Laid out with explicit percentage regions
+          (not flex-grow) so the signature band has a deterministic, generous
+          size and never collapses. The box carries `container-type: size` so
+          cqh/cqw font sizes resolve against the box; the DocID line lives inside
+          the same container so it sizes against the box too. %>
       <div class="w-full h-full relative" style="container-type: size">
-        <div class="w-full h-full flex flex-col" style="border: 1px solid <%= navy %>; color: <%= navy %>; box-sizing: border-box; padding: 4cqmin; overflow: hidden">
-          <div class="shrink-0 truncate" style="font-size: 11cqh">E-Signed:&nbsp;&nbsp;<%= esigned_at %></div>
-          <div class="flex-grow overflow-hidden" style="min-height: 0; width: 100%">
-            <img class="w-full h-full" style="object-fit: contain; object-position: center" src="<%= signature_attachment.url %>">
+        <div class="w-full h-full relative" style="border: 1px solid <%= navy %>; color: <%= navy %>; box-sizing: border-box; overflow: hidden">
+          <%# E-Signed line (top). %>
+          <div class="absolute truncate" style="top: 4cqh; left: 4cqw; right: 4cqw; font-size: 13cqh; font-weight: 600">E-Signed:&nbsp;&nbsp;<%= esigned_at %></div>
+          <%# Signature image — large central band, darkened for visibility. %>
+          <div class="absolute flex items-center justify-center" style="top: 20cqh; left: 4cqw; right: 4cqw; height: 44cqh">
+            <img style="max-width: 100%; max-height: 100%; filter: contrast(1.6) brightness(0.5)" src="<%= signature_attachment.url %>">
           </div>
-          <div class="shrink-0 truncate" style="font-size: 11cqh"><%= submitter.email %></div>
+          <%# Email + IP (lower-left). %>
+          <div class="absolute truncate" style="bottom: <%= submitter.ip.present? ? '22cqh' : '6cqh' %>; left: 4cqw; right: 4cqw; font-size: 13cqh"><%= submitter.email %></div>
           <% if submitter.ip.present? %>
-            <div class="shrink-0 truncate" style="font-size: 11cqh">IP:&nbsp;<%= submitter.ip %></div>
+            <div class="absolute truncate" style="bottom: 6cqh; left: 4cqw; right: 4cqw; font-size: 13cqh">IP:&nbsp;<%= submitter.ip %></div>
           <% end %>
-          <div class="shrink-0 self-end truncate" style="background: <%= navy %>; color: #fff; font-size: 10cqh; padding: 0.5cqh 2cqw; max-width: 65%"><%= PdfSignatureBoxes::ELECTRONIC_SIGNATURE_LABEL %></div>
+          <%# Navy banner with white label (bottom-right). %>
+          <div class="absolute flex items-center justify-center truncate" style="bottom: 0; right: 0; height: 20cqh; max-width: 62%; background: <%= navy %>; color: #fff; font-size: 11cqh; padding: 0 2cqw"><%= PdfSignatureBoxes::ELECTRONIC_SIGNATURE_LABEL %></div>
         </div>
-        <div class="absolute left-0 truncate" style="top: 100%; width: 100%; color: <%= navy %>; font-size: 9cqh; line-height: 1.1">DocID:&nbsp;<%= doc_id %></div>
+        <%# DocID just below the box border. %>
+        <div class="absolute left-0 truncate" style="top: 100%; width: 100%; color: <%= navy %>; font-size: 11cqh; line-height: 1.2">DocID:&nbsp;<%= doc_id %></div>
       </div>
     <% else %>
       <% is_narrow = area['h']&.positive? && (area['w'].to_f / area['h']) > 6 %>
