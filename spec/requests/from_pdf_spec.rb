@@ -187,10 +187,12 @@ describe 'From PDF API (POST /api/submissions/from_pdf)' do
       expect(response.parsed_body.size).to eq(2)
 
       template = Template.last
-      # One signature + one date field per submitter.
+      # One signature field per submitter, no separate date field: the final navy
+      # signature box renders the E-Signed date itself, so a date field would
+      # duplicate it.
       types = template.fields.map { |f| f['type'] }
       expect(types.count('signature')).to eq(2)
-      expect(types.count('date')).to eq(2)
+      expect(types.count('date')).to eq(0)
     end
   end
 end
