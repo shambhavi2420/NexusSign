@@ -217,53 +217,61 @@ module DataMigrations
         mapping = PdfFieldParser::SERTIFI_TAG_MAPPINGS.find { |pattern, _| tag_content.match?(pattern) }
         next unless mapping
 
-        widget = field.respond_to?(:each_widget) ? field.each_widget.first : field
-        next unless widget && widget[:Rect]
-
-        page = find_page_for_field(pdf, widget)
-        next unless page
-
-        page_index = nil
-        pdf.pages.each_with_index { |p, i| page_index = i if p == page }
-        next unless page_index
-
-        media_box = page[:CropBox] || page[:MediaBox]
-        page_width = (media_box[2] - media_box[0]).to_f
-        page_height = (media_box[3] - media_box[1]).to_f
-
-        x0, y0, x1, y1 = widget[:Rect].map(&:to_f)
-        x = x0 - media_box[0]
-        y = y0 - media_box[1]
-        w = x1 - x0
-        h = y1 - y0
-
         mapped = mapping[1]
         attrs = PdfFieldParser.parse_sertifi_attributes(tag_content)
 
-        rel_x = x / page_width
-        rel_y = 1.0 - ((y + h) / page_height)
-        rel_w = w / page_width
-        rel_h = h / page_height
+        # A single AcroForm field can have MULTIPLE widgets (the same field
+        # placed at several spots on the page — e.g. a "SertifiDate_1" date box
+        # appearing both at the top and next to the signature). Emit one template
+        # field per widget so none are dropped.
+        widgets = field.respond_to?(:each_widget) ? field.each_widget.to_a : [field]
+        widgets = widgets.compact.select { |w| w[:Rect] }
+        next if widgets.empty?
 
-        if attrs[:width] > 0
-          attr_rel_w = attrs[:width] / page_width
-          rel_w = [rel_w, attr_rel_w].max
+        widgets.each do |widget|
+          page = find_page_for_field(pdf, widget)
+          next unless page
+
+          page_index = nil
+          pdf.pages.each_with_index { |p, i| page_index = i if p == page }
+          next unless page_index
+
+          media_box = page[:CropBox] || page[:MediaBox]
+          page_width = (media_box[2] - media_box[0]).to_f
+          page_height = (media_box[3] - media_box[1]).to_f
+
+          x0, y0, x1, y1 = widget[:Rect].map(&:to_f)
+          x = x0 - media_box[0]
+          y = y0 - media_box[1]
+          w = x1 - x0
+          h = y1 - y0
+
+          rel_x = x / page_width
+          rel_y = 1.0 - ((y + h) / page_height)
+          rel_w = w / page_width
+          rel_h = h / page_height
+
+          if attrs[:width] > 0
+            attr_rel_w = attrs[:width] / page_width
+            rel_w = [rel_w, attr_rel_w].max
+          end
+
+          puts "  SFLD_MATCH: field=#{field_name.inspect} tag=#{tag_content.inspect} " \
+               "-> #{mapped[:name]} (#{mapped[:type]}) widget_rect=#{widget[:Rect].map(&:to_f).inspect}"
+
+          results << {
+            field_name: field_name,
+            name: mapped[:name] || attrs[:field_name] || field_name,
+            type: mapped[:type] || 'text',
+            required: attrs[:required],
+            preferences: mapped[:preferences] || {},
+            page: page_index,
+            rel_x: [[rel_x, 0].max, 0.95].min,
+            rel_y: [[rel_y, 0].max, 0.95].min,
+            rel_w: [[rel_w, 0.02].max, 0.95].min,
+            rel_h: [[rel_h, 0.01].max, 0.95].min
+          }
         end
-
-        puts "  SFLD_MATCH: field=#{field_name.inspect} tag=#{tag_content.inspect} -> #{mapped[:name]} (#{mapped[:type]})"
-
-        results << {
-          field_name: field_name,
-          name: mapped[:name] || attrs[:field_name] || field_name,
-          type: mapped[:type] || 'text',
-          required: attrs[:required],
-          preferences: mapped[:preferences] || {},
-          page: page_index,
-          rel_x: [[rel_x, 0].max, 0.95].min,
-          rel_y: [[rel_y, 0].max, 0.95].min,
-          rel_w: [[rel_w, 0.02].max, 0.95].min,
-          rel_h: [[rel_h, 0.01].max, 0.95].min
-        }
       end
 
       results
